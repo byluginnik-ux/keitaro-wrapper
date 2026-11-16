@@ -1,0 +1,88 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font: 400 0.9375rem / 1.375rem var(--sans);
+}
+
+h1,
+h2,
+h3,
+p,
+ul,
+ol {
+  margin: 0;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+h1 {
+  font: 700 1.75rem / 2.125rem var(--sans);
+}
+
+h2 {
+  font: 700 1.25rem / 1.625rem var(--sans);
+}
+
+h3 {
+  font: 600 1rem / 1.375rem var(--sans);
+}
+
+a {
+  color: var(--acc-text);
+  text-underline-offset: 3px;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--acc-line);
+  outline-offset: 2px;
+}
+
+.data {
+  font: 400 0.8125rem / 1.125rem var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.small {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--cap);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

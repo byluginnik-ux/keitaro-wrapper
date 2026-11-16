@@ -1,0 +1,47 @@
+/* Tokens of the design system; described in DESIGN.md. Components read only these. */
+:root {
+  color-scheme: light dark;
+
+  --acc: light-dark(#a1ffcb, #4f6b4e);
+  --acc-hi: light-dark(#bdffd9, #5d7c5c);
+  --acc-line: light-dark(#1f9d5c, #8fa68e);
+  --acc-text: light-dark(#0b6b3a, #a9c2a8);
+  --risk: light-dark(#ff7d8a, #a8404c);
+  --risk-deep: light-dark(#c2253a, #e8808a);
+  --risk-text: light-dark(#a31a2f, #f2a3ab);
+  --ink: light-dark(#1d1d1d, #f1f1ef);
+  --cap: light-dark(#5c5c5c, #b4b4b0);
+  --ground: light-dark(#ffffff, #1c1c1c);
+  --mist: light-dark(#f3f3f3, #242424);
+  --mist-2: light-dark(#e7e7e7, #2e2e2e);
+  --line: light-dark(#767676, #8a8a86);
+  --hair: light-dark(rgba(35, 35, 35, 0.14), rgba(255, 255, 255, 0.16));
+  --tint: light-dark(rgba(35, 35, 35, 0.05), rgba(255, 255, 255, 0.06));
+  --shade: 0 12px 32px light-dark(rgba(35, 35, 35, 0.16), rgba(0, 0, 0, 0.5));
+
+  --sans: "Montserrat Variable", Montserrat, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", Menlo, ui-monospace, monospace;
+
+  --r-pill: 999px;
+  --r-box: 14px;
+  --r-panel: 22px;
+
+  --gap-1: 8px;
+  --gap-2: 16px;
+  --gap-3: 24px;
+  --gap-4: 32px;
+  --page-pad: clamp(20px, 4.167vw, 60px);
+  --page-max: 1440px;
+
+  --control: 40px;
+  --control-lg: 48px;
+  --ease: 120ms ease-out;
+}
+
+:root[data-mode="light"] {
+  color-scheme: light;
+}
+
+:root[data-mode="dark"] {
+  color-scheme: dark;
+}
