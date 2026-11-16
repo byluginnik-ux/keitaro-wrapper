@@ -94,3 +94,12 @@ class OfferAlreadyInStreamError(DomainError):
 
     def __init__(self, name: str) -> None:
         super().__init__(f"Оффер «{name}» уже есть в потоке")
+
+
+class EmptyStreamError(DomainError):
+    """Nothing to publish: the stream has no active offers (R-ED-23)."""
+
+    code = "empty_stream"
+
+    def __init__(self, name: str) -> None:
+        super().__init__(f"В потоке «{name}» нет активных офферов — публиковать нечего")

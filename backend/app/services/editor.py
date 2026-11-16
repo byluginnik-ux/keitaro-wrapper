@@ -179,6 +179,10 @@ class EditorService:
         await self._storage.streams.save(restored)
         return restored
 
+    async def push(self, stream_id: UUID) -> Stream:
+        """Publish the draft: send the active offers and their shares to the tracker (R-ED-20)."""
+        raise NotImplementedError
+
     async def _stream(self, stream_id: UUID) -> Stream:
         stream = await self._storage.streams.get(stream_id)
         if stream is None:

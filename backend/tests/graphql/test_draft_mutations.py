@@ -4,7 +4,7 @@ import pytest
 
 from app.graphql.context import Context
 from app.graphql.schema import schema
-from tests.fakes import CAMPAIGN_ID, A, B, D, tracker_with_campaign
+from tests.fakes import CAMPAIGN_ID, OFFERS_STREAM_ID, A, B, D, tracker_with_campaign
 from tests.graphql.support import context_for
 
 pytestmark = pytest.mark.anyio
@@ -17,6 +17,7 @@ RESULT = """
   ... on OfferNotFound { message }
   ... on OfferAlreadyInStream { message }
   ... on ShareOverflow { message }
+  ... on EmptyStream { message }
   ... on KeitaroFailure { message }
 """
 FETCH = """
@@ -31,6 +32,7 @@ def mutation(name: str, input_type: str = "StreamOfferInput") -> str:
 
 
 CANCEL = f"mutation($id: ID!) {{ result: cancelDraft(streamId: $id) {{ {RESULT} }} }}"
+PUSH = f"mutation($id: ID!) {{ result: pushStream(streamId: $id) {{ {RESULT} }} }}"
 
 
 async def run(context: Context, document: str, **variables: object) -> dict[str, Any]:
@@ -136,3 +138,37 @@ async def test_tracker_failure_while_looking_the_offer_up() -> None:
     answer = await act(context, "addOffer", fetched["fetchStreams"]["streams"][1]["id"], D)
 
     assert answer["__typename"] == "KeitaroFailure"
+
+
+async def test_s3_draft_is_published() -> None:
+    """S3, R-ED-20, R-ED-21."""
+    keitaro = tracker_with_campaign()
+    context = context_for(keitaro)
+    stream_id = (await run(context, FETCH, id=CAMPAIGN_ID))["fetchStreams"]["streams"][1]["id"]
+    await act(context, "addOffer", stream_id, D)
+
+    answer = (await run(context, PUSH, id=stream_id))["result"]
+
+    assert (answer["__typename"], answer["dirty"], shares(answer)) == ("Stream", False, [25] * 4)
+    assert not any(offer["changed"] for offer in answer["offers"])
+    assert [offer.share for offer in keitaro.streams[OFFERS_STREAM_ID].offers] == [25] * 4
+
+
+async def test_publication_refusals_are_typed() -> None:
+    """R-ED-22, R-ED-23."""
+    keitaro = tracker_with_campaign((A, 100))
+    context = context_for(keitaro)
+    stream_id = (await run(context, FETCH, id=CAMPAIGN_ID))["fetchStreams"]["streams"][1]["id"]
+    await act(context, "removeOffer", stream_id, A)
+
+    empty = (await run(context, PUSH, id=stream_id))["result"]
+    await act(context, "addOffer", stream_id, B)
+    keitaro.fail_on.add("replace_stream_offers")
+    failed = (await run(context, PUSH, id=stream_id))["result"]
+    unknown = (await run(context, PUSH, id="not-an-id"))["result"]
+
+    assert [answer["__typename"] for answer in (empty, failed, unknown)] == [
+        "EmptyStream",
+        "KeitaroFailure",
+        "StreamNotFound",
+    ]
