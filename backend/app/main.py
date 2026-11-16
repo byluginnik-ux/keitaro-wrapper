@@ -9,6 +9,7 @@ from app.graphql.schema import schema
 from app.keitaro.client import KeitaroClient, create_http_client
 from app.services.catalog import CatalogService
 from app.services.creator import CreatorService
+from app.services.editor import EditorService
 from app.settings import Settings
 from app.storage.factory import open_storage
 
@@ -29,10 +30,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.creator = CreatorService(
                 keitaro, catalog, storage, name_prefix=config.campaign_name_prefix
             )
+            app.state.editor = EditorService(keitaro, catalog, storage)
             yield
 
     def context(request: Request) -> Context:
-        return Context(catalog=request.app.state.catalog, creator=request.app.state.creator)
+        state = request.app.state
+        return Context(catalog=state.catalog, creator=state.creator, editor=state.editor)
 
     app = FastAPI(
         title="Keitaro Wrapper", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None

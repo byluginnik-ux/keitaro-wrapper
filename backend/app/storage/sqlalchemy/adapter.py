@@ -156,6 +156,9 @@ class SqlStreams:
             message = "a stream refers to a campaign that is not stored"
             raise LookupError(message) from error
 
+    async def delete(self, stream_id: UUID) -> None:
+        raise NotImplementedError
+
 
 class SqlAudit:
     def __init__(self, sessions: Sessions) -> None:

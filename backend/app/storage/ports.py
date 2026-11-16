@@ -29,6 +29,10 @@ class StreamRepository(Protocol):
         """Save several streams in one atomic step."""
         ...
 
+    async def delete(self, stream_id: UUID) -> None:
+        """Forget a stream and its offers; an unknown ID is not an error (R-ED-08)."""
+        ...
+
 
 class AuditLog(Protocol):
     async def record(self, entry: AuditEntry) -> None: ...

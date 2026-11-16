@@ -123,3 +123,41 @@ class FakeKeitaro:
         updated = self.streams[stream_id].model_copy(update={"offers": tuple(offers)})
         self.streams[stream_id] = updated
         return updated
+
+
+CAMPAIGN_ID, REDIRECT_STREAM_ID, OFFERS_STREAM_ID = 93212, 564220, 564221
+
+
+def shares(*pairs: tuple[int, int]) -> tuple[StreamOffer, ...]:
+    return tuple(StreamOffer(offer_id=offer_id, share=share) for offer_id, share in pairs)
+
+
+def tracker_with_campaign(*offers: tuple[int, int]) -> FakeKeitaro:
+    """Build the starting point of scenarios S1–S8: a redirect stream and a stream of offers."""
+    keitaro = FakeKeitaro()
+    keitaro.campaigns[CAMPAIGN_ID] = Campaign(
+        id=CAMPAIGN_ID,
+        name="test_bulygin_sample",
+        alias="sample",
+        domain_id=1813,
+        group_id=10332,
+        traffic_source_id=836,
+    )
+    keitaro.streams[REDIRECT_STREAM_ID] = Stream(
+        id=REDIRECT_STREAM_ID,
+        campaign_id=CAMPAIGN_ID,
+        name="Flow 1",
+        position=1,
+        type="regular",
+        schema="redirect",
+    )
+    keitaro.streams[OFFERS_STREAM_ID] = Stream(
+        id=OFFERS_STREAM_ID,
+        campaign_id=CAMPAIGN_ID,
+        name="Flow 2",
+        position=2,
+        type="regular",
+        schema="landings",
+        offers=shares(*(offers or ((A, 34), (B, 33), (C, 33)))),
+    )
+    return keitaro

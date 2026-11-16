@@ -44,6 +44,9 @@ class MemoryStreams:
             raise LookupError(message)
         self.items.update({item.id: item for item in streams})
 
+    async def delete(self, stream_id: UUID) -> None:
+        raise NotImplementedError
+
 
 class MemoryAudit:
     def __init__(self) -> None:

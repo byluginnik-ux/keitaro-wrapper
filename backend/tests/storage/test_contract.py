@@ -143,6 +143,23 @@ async def test_save_all_is_all_or_nothing(storage: Storage) -> None:
     assert await storage.streams.list_by_campaign(owner.id) == []
 
 
+async def test_deleted_stream_is_gone_with_its_offers(storage: Storage) -> None:
+    """R-ED-08."""
+    owner = campaign()
+    await storage.campaigns.add(owner)
+    kept = Stream(uuid4(), owner.id, 564220, "Flow 1", 1, "redirect")
+    gone = offers_stream(owner.id)
+    await storage.streams.save_all([kept, gone])
+
+    await storage.streams.delete(gone.id)
+    await storage.streams.delete(uuid4())
+
+    assert await storage.streams.get(gone.id) is None
+    assert await storage.streams.list_by_campaign(owner.id) == [kept]
+    await storage.streams.save(gone)
+    assert await storage.streams.get(gone.id) == gone
+
+
 async def test_unknown_stream_is_none(storage: Storage) -> None:
     assert await storage.streams.get(uuid4()) is None
 

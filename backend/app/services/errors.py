@@ -49,3 +49,24 @@ class CampaignCreationError(KeitaroError):
     ) -> None:
         super().__init__(message, status)
         self.created_domain = created_domain
+
+
+class CampaignNotFoundError(DomainError):
+    """Neither our storage nor the tracker knows the campaign (R-ED-07)."""
+
+    code = "campaign_not_found"
+
+    def __init__(self, keitaro_id: int) -> None:
+        super().__init__(f"В Keitaro нет кампании {keitaro_id}")
+
+
+class DraftNotPublishedError(DomainError):
+    """A draft would be lost: publish or cancel it first (R-ED-06)."""
+
+    code = "draft_not_published"
+
+    def __init__(self, stream_names: list[str]) -> None:
+        super().__init__(
+            "Есть неопубликованные изменения: " + ", ".join(stream_names) + ". "
+            "Опубликуйте или отмените их, затем загрузите потоки снова"
+        )
