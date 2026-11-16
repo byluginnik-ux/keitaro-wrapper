@@ -19,6 +19,7 @@ description: Работа с Keitaro Admin API в этом проекте — к
 | Изменить поток | `PUT /streams/{id}` | любые поля `StreamObject`; `offers[]` заменяет состав целиком |
 | Офферы | `GET /offers` | массив `Offer` |
 | Домены | `GET /domains` | |
+| Создать домен | `POST /domains` | обязательно `name` (имя хоста); ответ — `Domain` с `id` |
 | Группы | `GET /groups?type=campaigns` | |
 | Источники | `GET /traffic_sources` | |
 | Имена фильтров | `GET /stream_filters` | |
