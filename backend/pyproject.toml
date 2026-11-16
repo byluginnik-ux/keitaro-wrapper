@@ -12,6 +12,7 @@ dependencies = [
     "pycountry>=26.2.16",
     "pydantic>=2.10",
     "pydantic-settings>=2.6",
+    "pymongo>=4.13",
     "sqlalchemy[asyncio]>=2.0.36",
     "strawberry-graphql>=0.250",
     "uvicorn[standard]>=0.32",

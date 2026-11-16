@@ -20,7 +20,22 @@ async def test_memory_backend_needs_no_database() -> None:
 
 async def test_postgres_backend_uses_the_configured_database(postgres_url: str) -> None:
     """R-ST-02, R-ST-03."""
-    settings = Settings(keitaro_api_key="fake-key", database_url=postgres_url)
+    settings = Settings(
+        keitaro_api_key="fake-key", storage_backend="postgres", database_url=postgres_url
+    )
+
+    async with open_storage(settings) as storage:
+        assert await storage.campaigns.get_by_keitaro_id(-1) is None
+
+
+async def test_mongo_backend_uses_the_configured_database(mongo_url: str) -> None:
+    """R-ST-03: the same services run on MongoDB by changing one variable."""
+    settings = Settings(
+        keitaro_api_key="fake-key",
+        storage_backend="mongo",
+        mongo_url=mongo_url,
+        mongo_database="keitaro_test",
+    )
 
     async with open_storage(settings) as storage:
         assert await storage.campaigns.get_by_keitaro_id(-1) is None

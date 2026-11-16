@@ -13,5 +13,7 @@ class Settings(BaseSettings):
     campaign_name_prefix: str = "test_bulygin_"
     debug: bool = False
 
-    storage_backend: Literal["postgres", "memory"] = "postgres"
+    storage_backend: Literal["postgres", "mongo", "memory"] = "postgres"
     database_url: str = "postgresql+asyncpg://keitaro:keitaro@db:5432/keitaro"
+    mongo_url: str = "mongodb://mongo:27017/?directConnection=true"
+    mongo_database: str = "keitaro"

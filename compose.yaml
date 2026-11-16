@@ -69,5 +69,25 @@ services:
     tmpfs:
       - /var/lib/postgresql/data
 
+  # Один узел в режиме replica set: транзакциям MongoDB он нужен обязательно.
+  mongo-test:
+    image: mongo:8
+    profiles: [test]
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "127.0.0.1:${TEST_MONGO_PORT:-57017}:27017"
+    tmpfs:
+      - /data/db
+    healthcheck: &mongo-health
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - "try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'localhost:27017'}]}).ok }"
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
 volumes:
   db-data:
