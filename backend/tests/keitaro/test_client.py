@@ -167,6 +167,16 @@ async def test_domain_is_created_by_name(tracker: respx.MockRouter, keitaro: Kei
     assert domain.id == 1813
 
 
+async def test_campaign_is_read_by_id(tracker: respx.MockRouter, keitaro: KeitaroClient) -> None:
+    """R-ED-07."""
+    tracker.get("/campaigns/93212").respond(json=fixture_json("campaign.json"))
+
+    campaign = await keitaro.get_campaign(93212)
+
+    assert (campaign.id, campaign.name, campaign.alias) == (93212, "test_bulygin_sample", "sample")
+    assert campaign.traffic_source_id == 836
+
+
 async def test_campaign_is_deleted(tracker: respx.MockRouter, keitaro: KeitaroClient) -> None:
     """R-CR-07."""
     route = tracker.delete("/campaigns/93212").respond(json=fixture_json("campaign.json"))

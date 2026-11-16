@@ -78,6 +78,13 @@ class FakeKeitaro:
         self._enter("list_offers")
         return list(self.offers)
 
+    async def get_campaign(self, campaign_id: int) -> Campaign:
+        self._enter("get_campaign")
+        if campaign_id not in self.campaigns:
+            message = "Keitaro ответил 404"
+            raise KeitaroError(message, 404)
+        return self.campaigns[campaign_id]
+
     async def create_campaign(self, campaign: NewCampaign) -> Campaign:
         self._enter("create_campaign")
         created = Campaign(id=self._new_id(), **campaign.model_dump(exclude={"type"}))
