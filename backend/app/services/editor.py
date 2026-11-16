@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
 from http import HTTPStatus
@@ -8,12 +8,39 @@ from app.keitaro import models as tracker
 from app.keitaro.gateway import KeitaroGateway
 from app.services.catalog import CatalogService
 from app.services.creator import utc_now
-from app.services.errors import CampaignNotFoundError, DraftNotPublishedError, KeitaroError
+from app.services.errors import (
+    CampaignNotFoundError,
+    DraftNotPublishedError,
+    KeitaroError,
+    OfferAlreadyInStreamError,
+    OfferNotFoundError,
+    StreamNotFoundError,
+    ValidationError,
+)
 from app.services.models import AuditEntry, Campaign, Details, OfferLink, Published, Stream
-from app.services.shares import OfferState
+from app.services.shares import TOTAL, OfferShare, OfferState, recalculate
 from app.storage.ports import Storage
 
 ACTIVE = "active"
+OFFERS_KIND = "landings"
+MIN_PINNED = 1
+
+
+def _find(stream: Stream, offer_id: int) -> OfferLink | None:
+    return next((link for link in stream.offers if link.offer_id == offer_id), None)
+
+
+def _active(stream: Stream, offer_id: int) -> OfferLink:
+    link = _find(stream, offer_id)
+    if link is None or link.state is not OfferState.ACTIVE:
+        message = f"В потоке нет активного оффера {offer_id}"
+        raise OfferNotFoundError(message)
+    return link
+
+
+def _swap(stream: Stream, changed: OfferLink) -> list[OfferLink]:
+    """Put the changed link in place of the one with the same offer."""
+    return [changed if link.offer_id == changed.offer_id else link for link in stream.offers]
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,27 +109,97 @@ class EditorService:
 
     async def add_offer(self, stream_id: UUID, offer_id: int) -> Stream:
         """Put an offer into the draft; a removed one comes back (R-ED-10, 11)."""
-        raise NotImplementedError
+        stream = await self._stream(stream_id)
+        if stream.kind != OFFERS_KIND:
+            raise ValidationError(
+                {"streamId": "В этот поток офферы не добавляются: он не ведёт на офферы"}
+            )
+        known = _find(stream, offer_id)
+        if known is not None:
+            return await self.bring_back(stream_id, offer_id)
+        offer = await self._catalog.get_offer(offer_id)
+        if offer is None:
+            message = f"В Keitaro нет активного оффера {offer_id}"
+            raise OfferNotFoundError(message)
+        return await self._save(stream, [*stream.offers, OfferLink(offer.id, offer.name, 0)])
 
     async def remove_offer(self, stream_id: UUID, offer_id: int) -> Stream:
         """Take an offer out of the draft, keeping it for bringing back (R-ED-12)."""
-        raise NotImplementedError
+        stream = await self._stream(stream_id)
+        target = _active(stream, offer_id)
+        removed = replace(target, share=0, pinned=False, state=OfferState.REMOVED)
+        links = [
+            removed if link is target else link
+            for link in stream.offers
+            if link is not target or target.published is not None
+        ]
+        return await self._save(stream, links)
 
     async def bring_back(self, stream_id: UUID, offer_id: int) -> Stream:
         """Make a removed offer active again (R-ED-13)."""
-        raise NotImplementedError
+        stream = await self._stream(stream_id)
+        target = _find(stream, offer_id)
+        if target is None:
+            message = f"В потоке нет оффера {offer_id}"
+            raise OfferNotFoundError(message)
+        if target.state is OfferState.ACTIVE:
+            raise OfferAlreadyInStreamError(target.name)
+        return await self._save(stream, _swap(stream, replace(target, state=OfferState.ACTIVE)))
 
     async def pin_share(self, stream_id: UUID, offer_id: int, share: int) -> Stream:
         """Set a share by hand and keep it through recalculation (R-SH-06)."""
-        raise NotImplementedError
+        stream = await self._stream(stream_id)
+        if not MIN_PINNED <= share <= TOTAL:
+            raise ValidationError({"share": f"Доля — целое число от {MIN_PINNED} до {TOTAL}"})
+        target = _active(stream, offer_id)
+        return await self._save(stream, _swap(stream, replace(target, share=share, pinned=True)))
 
     async def unpin_share(self, stream_id: UUID, offer_id: int) -> Stream:
         """Let the offer take part in recalculation again (R-SH-07)."""
-        raise NotImplementedError
+        stream = await self._stream(stream_id)
+        target = _active(stream, offer_id)
+        return await self._save(stream, _swap(stream, replace(target, pinned=False)))
 
     async def cancel(self, stream_id: UUID) -> Stream:
         """Return the stream to its published snapshot (R-ED-14)."""
-        raise NotImplementedError
+        stream = await self._stream(stream_id)
+        restored = replace(
+            stream,
+            offers=tuple(
+                replace(
+                    link,
+                    share=link.published.share,
+                    state=link.published.state,
+                    pinned=link.published.pinned,
+                )
+                for link in stream.offers
+                if link.published is not None
+            ),
+        )
+        await self._storage.streams.save(restored)
+        return restored
+
+    async def _stream(self, stream_id: UUID) -> Stream:
+        stream = await self._storage.streams.get(stream_id)
+        if stream is None:
+            raise StreamNotFoundError
+        return stream
+
+    async def _save(self, stream: Stream, links: Sequence[OfferLink]) -> Stream:
+        """Recalculate the shares and store the stream as a whole (R-SH-01, R-ST-05).
+
+        A refusal of the recalculation leaves the stored stream untouched (R-SH-08).
+        """
+        split = recalculate(
+            [OfferShare(link.offer_id, link.share, link.pinned, link.state) for link in links]
+        )
+        offers = tuple(
+            replace(link, share=part.share, pinned=part.pinned)
+            for link, part in zip(links, split, strict=True)
+        )
+        updated = replace(stream, offers=offers)
+        await self._storage.streams.save(updated)
+        return updated
 
     def _adopt(self, theirs: tracker.Campaign) -> Campaign:
         """Describe a campaign made outside this service (R-ED-07)."""
