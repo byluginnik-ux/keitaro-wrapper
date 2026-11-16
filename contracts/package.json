@@ -1,5 +1,31 @@
 {
   "name": "@keitaro-wrapper/contracts",
-  "version": "0.0.0",
-  "private": true
+  "version": "0.1.0",
+  "description": "GraphQL contract of Keitaro Wrapper: the schema and TypeScript types generated from it",
+  "type": "module",
+  "packageManager": "pnpm@12.21.0",
+  "files": [
+    "schema.graphql",
+    "ts",
+    "CHANGELOG.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./ts/index.ts",
+      "default": "./ts/index.ts"
+    },
+    "./schema.graphql": "./schema.graphql"
+  },
+  "scripts": {
+    "codegen": "graphql-codegen --config codegen.yml"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@graphql-codegen/add": "^8.0.0",
+    "@graphql-codegen/cli": "^8.0.0",
+    "@graphql-codegen/typescript": "^7.0.1",
+    "graphql": "^16.9.0"
+  }
 }

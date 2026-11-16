@@ -1,0 +1,13 @@
+# TypeScript types of the contract; operations are typed by their consumers.
+schema: schema.graphql
+generates:
+  ts/generated.ts:
+    plugins:
+      - add:
+          content: "// GENERATED from schema.graphql by scripts/generate.sh — do not edit by hand."
+      - typescript
+    config:
+      enumsAsTypes: true
+      useTypeImports: true
+      scalars:
+        ID: string
