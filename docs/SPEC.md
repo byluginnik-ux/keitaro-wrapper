@@ -220,7 +220,7 @@ Admin API: база `{KEITARO_BASE_URL}/admin_api/v1`, заголовок `Api-K
 | R-KT-01 … R-KT-04, R-KT-06 | F01 | `backend/tests/keitaro/test_client.py` |
 | R-KT-07 | F02 | `backend/tests/services/test_catalog.py`, `backend/tests/services/test_countries.py` |
 | R-KT-05 | F07 | — |
-| R-ST-01 … R-ST-05 | F03, F04 | — |
+| R-ST-01 … R-ST-05 | F03, F04 | `backend/tests/storage/test_contract.py` (один набор для всех адаптеров) |
 | R-CR-01 … R-CR-12 | F05 | — |
 | R-SH-01 … R-SH-09, S7, S8 | F06 | `backend/tests/services/test_shares.py` |
 | R-ED-01 … R-ED-06, S1, S6 | F07 | — |

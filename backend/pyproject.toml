@@ -4,12 +4,15 @@ version = "0.1.0"
 description = "GraphQL backend for the Keitaro campaign creator and offer editor"
 requires-python = ">=3.13"
 dependencies = [
+    "alembic>=1.14",
+    "asyncpg>=0.30",
     "fastapi>=0.115",
     "httpx>=0.28",
     "keitaro-wrapper-contracts",
     "pycountry>=26.2.16",
     "pydantic>=2.10",
     "pydantic-settings>=2.6",
+    "sqlalchemy[asyncio]>=2.0.36",
     "strawberry-graphql>=0.250",
     "uvicorn[standard]>=0.32",
 ]
