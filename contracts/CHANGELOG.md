@@ -2,6 +2,12 @@
 
 Версия одна для npm-пакета и пакета Python. Удаление или переименование — мажорная, добавление — минорная.
 
+## 0.4.0
+
+- Мутации черновика: `addOffer`, `removeOffer`, `bringBackOffer`, `pinShare`, `unpinShare`, `cancelDraft`.
+- Результат `StreamResult = Stream | StreamNotFound | OfferNotFound | OfferAlreadyInStream | ShareOverflow | ValidationFailed | KeitaroFailure`.
+- Входные типы `StreamOfferInput`, `PinShareInput`.
+
 ## 0.3.0
 
 - Типы редактора: `Stream`, `StreamOffer`, `PublishedOffer`, enum `OfferState`.

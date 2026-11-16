@@ -1,6 +1,6 @@
 {
   "name": "@keitaro-wrapper/contracts",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "GraphQL contract of Keitaro Wrapper: the schema and TypeScript types generated from it",
   "type": "module",
   "packageManager": "pnpm@12.21.0",

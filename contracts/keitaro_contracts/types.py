@@ -119,6 +119,47 @@ class KeitaroFailure:
     )
 
 
+@strawberry.type(description="У нас нет такого потока")
+class StreamNotFound:
+    message: str
+
+
+@strawberry.type(description="Оффера нет в Keitaro или в потоке — смотря что требовалось действию")
+class OfferNotFound:
+    message: str
+
+
+@strawberry.type(description="Оффер уже получает трафик в этом потоке")
+class OfferAlreadyInStream:
+    message: str
+
+
+@strawberry.type(
+    description="Закреплённые доли не дают разделить 100 % между активными офферами; черновик не изменён"
+)
+class ShareOverflow:
+    message: str
+
+
+@strawberry.type(description="Ввод не прошёл проверку; в Keitaro ничего не изменено")
+class ValidationFailed:
+    message: str
+    fields: list[FieldError]
+
+
+@strawberry.input(description="Оффер в потоке, над которым выполняется действие")
+class StreamOfferInput:
+    stream_id: strawberry.ID
+    offer_id: int
+
+
+@strawberry.input(description="Закрепить долю оффера")
+class PinShareInput:
+    stream_id: strawberry.ID
+    offer_id: int
+    share: int = strawberry.field(description="Доля от 1 до 100")
+
+
 @strawberry.input(description="Что создать: кампания с двумя потоками")
 class CreateCampaignInput:
     name: str = strawberry.field(description="Название с обязательным префиксом тестовых кампаний")
@@ -142,15 +183,20 @@ class FieldError:
     message: str
 
 
-@strawberry.type(description="Ввод не прошёл проверку; в Keitaro ничего не изменено")
-class ValidationFailed:
-    message: str
-    fields: list[FieldError]
-
-
 FetchStreamsResult = Annotated[
     StreamsFetched | DraftNotPublished | CampaignNotFound | KeitaroFailure,
     strawberry.union(name="FetchStreamsResult"),
+]
+
+StreamResult = Annotated[
+    Stream
+    | StreamNotFound
+    | OfferNotFound
+    | OfferAlreadyInStream
+    | ShareOverflow
+    | ValidationFailed
+    | KeitaroFailure,
+    strawberry.union(name="StreamResult"),
 ]
 
 CreateCampaignResult = Annotated[

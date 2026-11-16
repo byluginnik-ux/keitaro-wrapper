@@ -122,6 +122,51 @@ type CampaignNotFound {
 
 union FetchStreamsResult = StreamsFetched | DraftNotPublished | CampaignNotFound | KeitaroFailure
 
+"""У нас нет такого потока"""
+type StreamNotFound {
+  message: String!
+}
+
+"""Оффера нет в Keitaro или в потоке — смотря что требовалось действию"""
+type OfferNotFound {
+  message: String!
+}
+
+"""Оффер уже получает трафик в этом потоке"""
+type OfferAlreadyInStream {
+  message: String!
+}
+
+"""Закреплённые доли не дают разделить 100 % между активными офферами; черновик не изменён"""
+type ShareOverflow {
+  message: String!
+}
+
+# Поток после действия либо причина отказа; при отказе черновик остаётся прежним.
+union StreamResult =
+  | Stream
+  | StreamNotFound
+  | OfferNotFound
+  | OfferAlreadyInStream
+  | ShareOverflow
+  | ValidationFailed
+  | KeitaroFailure
+
+"""Оффер в потоке, над которым выполняется действие"""
+input StreamOfferInput {
+  streamId: ID!
+  offerId: Int!
+}
+
+"""Закрепить долю оффера"""
+input PinShareInput {
+  streamId: ID!
+  offerId: Int!
+
+  """Доля от 1 до 100"""
+  share: Int!
+}
+
 """Что создать: кампания с двумя потоками"""
 input CreateCampaignInput {
   """Название с обязательным префиксом тестовых кампаний"""
@@ -197,4 +242,22 @@ type Mutation {
 
   """Загрузить потоки кампании из Keitaro по её ID в трекере и сверить с сохранёнными"""
   fetchStreams(campaignKeitaroId: Int!): FetchStreamsResult!
+
+  """Добавить оффер в черновик потока; убранный оффер возвращается"""
+  addOffer(input: StreamOfferInput!): StreamResult!
+
+  """Убрать оффер из черновика: он остаётся в потоке со статусом REMOVED и долей 0"""
+  removeOffer(input: StreamOfferInput!): StreamResult!
+
+  """Вернуть убранный оффер"""
+  bringBackOffer(input: StreamOfferInput!): StreamResult!
+
+  """Задать долю оффера и закрепить её; остальные доли пересчитываются"""
+  pinShare(input: PinShareInput!): StreamResult!
+
+  """Снять закрепление; оффер снова участвует в пересчёте"""
+  unpinShare(input: StreamOfferInput!): StreamResult!
+
+  """Отменить черновик: поток возвращается к опубликованному снимку"""
+  cancelDraft(streamId: ID!): StreamResult!
 }

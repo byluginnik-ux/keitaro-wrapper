@@ -96,10 +96,37 @@ export type KeitaroFailure = {
 
 export type Mutation = {
   __typename?: 'Mutation';
+  /** Добавить оффер в черновик потока; убранный оффер возвращается */
+  addOffer: StreamResult;
+  /** Вернуть убранный оффер */
+  bringBackOffer: StreamResult;
+  /** Отменить черновик: поток возвращается к опубликованному снимку */
+  cancelDraft: StreamResult;
   /** Создать кампанию: поток 1 уводит страну на Google, поток 2 ведёт на оффер */
   createCampaign: CreateCampaignResult;
   /** Загрузить потоки кампании из Keitaro по её ID в трекере и сверить с сохранёнными */
   fetchStreams: FetchStreamsResult;
+  /** Задать долю оффера и закрепить её; остальные доли пересчитываются */
+  pinShare: StreamResult;
+  /** Убрать оффер из черновика: он остаётся в потоке со статусом REMOVED и долей 0 */
+  removeOffer: StreamResult;
+  /** Снять закрепление; оффер снова участвует в пересчёте */
+  unpinShare: StreamResult;
+};
+
+
+export type MutationAddOfferArgs = {
+  input: StreamOfferInput;
+};
+
+
+export type MutationBringBackOfferArgs = {
+  input: StreamOfferInput;
+};
+
+
+export type MutationCancelDraftArgs = {
+  streamId: Scalars['ID']['input'];
 };
 
 
@@ -112,6 +139,21 @@ export type MutationFetchStreamsArgs = {
   campaignKeitaroId: Scalars['Int']['input'];
 };
 
+
+export type MutationPinShareArgs = {
+  input: PinShareInput;
+};
+
+
+export type MutationRemoveOfferArgs = {
+  input: StreamOfferInput;
+};
+
+
+export type MutationUnpinShareArgs = {
+  input: StreamOfferInput;
+};
+
 /** Оффер, заведённый в Keitaro */
 export type Offer = {
   __typename?: 'Offer';
@@ -119,9 +161,29 @@ export type Offer = {
   name: Scalars['String']['output'];
 };
 
+/** Оффер уже получает трафик в этом потоке */
+export type OfferAlreadyInStream = {
+  __typename?: 'OfferAlreadyInStream';
+  message: Scalars['String']['output'];
+};
+
+/** Оффера нет в Keitaro или в потоке — смотря что требовалось действию */
+export type OfferNotFound = {
+  __typename?: 'OfferNotFound';
+  message: Scalars['String']['output'];
+};
+
 export type OfferState =
   | 'ACTIVE'
   | 'REMOVED';
+
+/** Закрепить долю оффера */
+export type PinShareInput = {
+  offerId: Scalars['Int']['input'];
+  /** Доля от 1 до 100 */
+  share: Scalars['Int']['input'];
+  streamId: Scalars['ID']['input'];
+};
 
 /** Что было в Keitaro для оффера при последней загрузке или публикации */
 export type PublishedOffer = {
@@ -172,6 +234,12 @@ export type QueryStreamsArgs = {
   campaignId: Scalars['ID']['input'];
 };
 
+/** Закреплённые доли не дают разделить 100 % между активными офферами; черновик не изменён */
+export type ShareOverflow = {
+  __typename?: 'ShareOverflow';
+  message: Scalars['String']['output'];
+};
+
 /** Поток кампании */
 export type Stream = {
   __typename?: 'Stream';
@@ -191,6 +259,12 @@ export type Stream = {
   position: Scalars['Int']['output'];
 };
 
+/** У нас нет такого потока */
+export type StreamNotFound = {
+  __typename?: 'StreamNotFound';
+  message: Scalars['String']['output'];
+};
+
 /** Оффер в потоке: черновик и опубликованный снимок */
 export type StreamOffer = {
   __typename?: 'StreamOffer';
@@ -206,6 +280,14 @@ export type StreamOffer = {
   share: Scalars['Int']['output'];
   state: OfferState;
 };
+
+/** Оффер в потоке, над которым выполняется действие */
+export type StreamOfferInput = {
+  offerId: Scalars['Int']['input'];
+  streamId: Scalars['ID']['input'];
+};
+
+export type StreamResult = KeitaroFailure | OfferAlreadyInStream | OfferNotFound | ShareOverflow | Stream | StreamNotFound | ValidationFailed;
 
 /** Потоки загружены из Keitaro и сохранены */
 export type StreamsFetched = {
