@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from strawberry.fastapi import GraphQLRouter
 
 from app.graphql.context import Context, ServiceInfo
-from app.graphql.schema import schema
+from app.graphql.schema import build_schema
 from app.keitaro.client import KeitaroClient, create_http_client
 from app.services.catalog import CatalogService
 from app.services.creator import CreatorService
@@ -26,7 +26,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         async with (
-            create_http_client(config.keitaro_base_url, config.keitaro_api_key) as http,
+            create_http_client(
+                config.keitaro_base_url, config.keitaro_api_key.get_secret_value()
+            ) as http,
             open_storage(config) as storage,
         ):
             keitaro = KeitaroClient(http)
@@ -48,7 +50,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title="Keitaro Wrapper", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None
     )
     graphql = GraphQLRouter(
-        schema, context_getter=context, graphql_ide="graphiql" if config.debug else None
+        build_schema(debug=config.debug),
+        context_getter=context,
+        graphql_ide="graphiql" if config.debug else None,
     )
     app.include_router(graphql, prefix="/graphql")
 

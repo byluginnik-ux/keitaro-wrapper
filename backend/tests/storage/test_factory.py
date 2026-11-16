@@ -1,4 +1,5 @@
 import pytest
+from pydantic import SecretStr
 
 from app.settings import Settings
 from app.storage.factory import open_storage
@@ -9,7 +10,7 @@ pytestmark = pytest.mark.anyio
 
 async def test_memory_backend_needs_no_database() -> None:
     """R-ST-03."""
-    settings = Settings(keitaro_api_key="fake-key", storage_backend="memory")
+    settings = Settings(keitaro_api_key=SecretStr("fake-key"), storage_backend="memory")
 
     async with open_storage(settings) as storage:
         saved = campaign()
@@ -21,7 +22,7 @@ async def test_memory_backend_needs_no_database() -> None:
 async def test_postgres_backend_uses_the_configured_database(postgres_url: str) -> None:
     """R-ST-02, R-ST-03."""
     settings = Settings(
-        keitaro_api_key="fake-key", storage_backend="postgres", database_url=postgres_url
+        keitaro_api_key=SecretStr("fake-key"), storage_backend="postgres", database_url=postgres_url
     )
 
     async with open_storage(settings) as storage:
@@ -31,7 +32,7 @@ async def test_postgres_backend_uses_the_configured_database(postgres_url: str) 
 async def test_mongo_backend_uses_the_configured_database(mongo_url: str) -> None:
     """R-ST-03: the same services run on MongoDB by changing one variable."""
     settings = Settings(
-        keitaro_api_key="fake-key",
+        keitaro_api_key=SecretStr("fake-key"),
         storage_backend="mongo",
         mongo_url=mongo_url,
         mongo_database="keitaro_test",
@@ -44,4 +45,4 @@ async def test_mongo_backend_uses_the_configured_database(mongo_url: str) -> Non
 def test_unknown_backend_is_rejected() -> None:
     """R-ST-03."""
     with pytest.raises(ValueError, match="storage_backend"):
-        Settings(keitaro_api_key="fake-key", storage_backend="sqlite")  # pyright: ignore[reportArgumentType] — the point of the test
+        Settings(keitaro_api_key=SecretStr("fake-key"), storage_backend="sqlite")  # pyright: ignore[reportArgumentType] — the point of the test

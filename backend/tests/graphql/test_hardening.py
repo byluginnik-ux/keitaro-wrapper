@@ -1,6 +1,7 @@
 """R-Q-07: the API gives away nothing a client of the service does not need."""
 
 import pytest
+from pydantic import SecretStr
 
 from app.graphql.schema import build_schema
 from app.settings import Settings
@@ -64,7 +65,7 @@ async def test_an_oversized_request_is_refused() -> None:
 
 
 def test_printed_settings_do_not_show_the_tracker_key() -> None:
-    settings = Settings(keitaro_api_key="very-secret-key", storage_backend="memory")  # pyright: ignore[reportArgumentType] — pydantic turns the text into a secret
+    settings = Settings(keitaro_api_key=SecretStr("very-secret-key"), storage_backend="memory")
 
     assert "very-secret-key" not in repr(settings)
     assert "very-secret-key" not in settings.model_dump_json()

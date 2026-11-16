@@ -1,5 +1,6 @@
 from typing import Literal
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,7 +10,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     keitaro_base_url: str = "https://tlgk.host"
-    keitaro_api_key: str
+    keitaro_api_key: SecretStr
     campaign_name_prefix: str = "test_bulygin_"
     debug: bool = False
 

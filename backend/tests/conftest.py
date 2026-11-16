@@ -2,6 +2,7 @@ from collections.abc import AsyncIterator
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from pydantic import SecretStr
 
 from app.main import create_app
 from app.settings import Settings
@@ -16,7 +17,7 @@ def anyio_backend() -> str:
 def settings() -> Settings:
     return Settings(
         keitaro_base_url="https://tracker.test",
-        keitaro_api_key="fake-key",
+        keitaro_api_key=SecretStr("fake-key"),
         storage_backend="memory",
     )
 

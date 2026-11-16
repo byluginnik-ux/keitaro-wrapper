@@ -3,6 +3,12 @@ from uuid import UUID
 
 import strawberry
 from keitaro_contracts import types as gql
+from strawberry.extensions import (
+    DisableIntrospection,
+    MaxAliasesLimiter,
+    MaxTokensLimiter,
+    SchemaExtension,
+)
 from strawberry.types import Info
 
 from app.graphql import mappers
@@ -201,10 +207,25 @@ class Mutation:
         return await stream_result(stream_id, info.context.editor.push)
 
 
+MAX_TOKENS = 1000
+MAX_ALIASES = 15
+
+
 def build_schema(*, debug: bool) -> strawberry.Schema:
-    """Build the schema the service answers with."""
-    del debug
-    return strawberry.Schema(query=Query, mutation=Mutation, extensions=[ErrorCodes])
+    """Build the schema the service answers with (R-Q-07).
+
+    The schema has no cycles, so depth is bounded by the types themselves;
+    what a client could inflate is the number of fields, hence the two limits.
+    """
+    # factories: the library builds a fresh extension for every request
+    extensions: list[type[SchemaExtension] | Callable[[], SchemaExtension]] = [
+        ErrorCodes,
+        lambda: MaxTokensLimiter(max_token_count=MAX_TOKENS),
+        lambda: MaxAliasesLimiter(max_alias_count=MAX_ALIASES),
+    ]
+    if not debug:
+        extensions.append(DisableIntrospection)
+    return strawberry.Schema(query=Query, mutation=Mutation, extensions=extensions)
 
 
 # the full schema, for comparing with the contract
