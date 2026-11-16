@@ -7,6 +7,7 @@
                                                         └──▶ Postgres (SQLAlchemy) | MongoDB
 ```
 
+- `contracts/` — контракт GraphQL: `schema.graphql` и сгенерированные из него типы Python и TypeScript. Собирается в npm-пакет и пакет Python; единственное место правки общих типов.
 - `backend/` — FastAPI, GraphQL (Strawberry), SQLAlchemy + Alembic; второй адаптер хранилища — MongoDB.
 - `frontend/` — Nuxt (Vue 3 + TypeScript); сервер Nitro — BFF между браузером и бэкендом.
 - `docs/SPEC.md` — техническое задание; `docs/FEATURES.md` — список фич и их статус; `docs/AI_USAGE.md` — как использовались ИИ-агенты.
@@ -33,6 +34,8 @@ docker compose run --rm backend alembic downgrade -1      # откатить п�
 
 ## Разработка
 
+Контракт: `contracts/scripts/generate.sh` после правки `schema.graphql`, `contracts/scripts/check.sh` для проверки.
+
 | | backend | frontend |
 |---|---------|----------|
 | Зависимости | `uv sync` | `corepack pnpm install` |
@@ -51,4 +54,4 @@ uvx pre-commit install
 
 ## Агенты
 
-Правила и скиллы для ИИ-агентов лежат в репозитории: общие — `AGENTS.md` и `.agents/skills/`, для частей — `backend/AGENTS.md`, `frontend/AGENTS.md` и их `.agents/skills/`.
+Правила и скиллы для ИИ-агентов лежат в репозитории: общие — `AGENTS.md` и `.agents/skills/`, для частей — `contracts/AGENTS.md`, `backend/AGENTS.md`, `frontend/AGENTS.md` и их `.agents/skills/`.

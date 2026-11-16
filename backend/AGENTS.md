@@ -24,7 +24,7 @@ uv run uvicorn app.main:app --reload # запуск, http://127.0.0.1:8000/healt
 |-------|-------|
 | `fastapi-layers` | куда положить код, границы слоёв |
 | `typed-python` | типы, pydantic, dataclass, ошибки pyright и ruff |
-| `graphql-strawberry` | схема, ошибки-union, `schema.graphql` |
+| `graphql-strawberry` | резолверы поверх типов контракта, ошибки-union, соответствие схеме |
 | `keitaro-api` | запросы и поля Admin API |
 | `storage-adapters` | интерфейсы, SQLAlchemy, Alembic, MongoDB |
 | `share-math` | пересчёт долей |
@@ -34,6 +34,6 @@ uv run uvicorn app.main:app --reload # запуск, http://127.0.0.1:8000/healt
 ## Правила части
 
 - Бэкенд лаконичный: резолвер вызывает один метод сервиса; абстракция появляется только при двух реализациях или ради подмены в тестах.
-- Изменил типы GraphQL — перевыгрузи `schema.graphql` в том же коммите.
+- Типы GraphQL берутся из пакета `keitaro_contracts` и здесь не объявляются. Нужен новый тип или поле — сначала правка `../contracts/schema.graphql` (скилл `contract-change`), потом резолвер.
 - Изменил модели SQLAlchemy — миграция Alembic в том же коммите; тот же контракт должен пройти адаптер MongoDB.
 - Тесты не ходят в сеть.

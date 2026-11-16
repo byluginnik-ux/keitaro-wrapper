@@ -6,10 +6,11 @@
 |------|---------|---------|
 | `docs/SPEC.md` | Техническое задание, требования `R-xx`, сценарии `S1`–`S8` | источник истины |
 | `docs/FEATURES.md` | Порядок фич и их статус | обновлять при закрытии фичи |
+| `contracts/` | Схема GraphQL и сгенерированные типы Python и TypeScript; публикуемый пакет | `contracts/AGENTS.md` |
 | `backend/` | FastAPI, GraphQL, клиент Keitaro, хранилище | `backend/AGENTS.md` |
 | `frontend/` | Nuxt: интерфейс и BFF на Nitro | `frontend/AGENTS.md` |
 
-Части не импортируют код друг друга. Контракт между ними — `backend/schema.graphql`.
+`backend/` и `frontend/` не импортируют код друг друга; обе зависят только от `contracts/`. Общий тип меняется в одном месте — `contracts/schema.graphql` (скилл `contract-change`), и только потом в частях.
 
 ## Порядок работы
 
@@ -30,7 +31,7 @@
 
 ## Скиллы
 
-Общие лежат в `.agents/skills/` (ссылка `.claude/skills`). Скиллы частей — в `backend/.agents/skills/` и `frontend/.agents/skills/`.
+Общие лежат в `.agents/skills/` (ссылка `.claude/skills`). Скиллы частей — в `contracts/.agents/skills/`, `backend/.agents/skills/` и `frontend/.agents/skills/`.
 
 Установленные у разработчика глобально и полезные здесь (в репозиторий не копируются):
 `graphify` — граф кода для вопросов об архитектуре; `pretty-mermaid` — диаграммы;

@@ -30,7 +30,7 @@ tests/    server/ — обработчики BFF, app/ — компоненты,
 | Скилл | Когда |
 |-------|-------|
 | `nitro-bff` | любой маршрут в `server/`, граница «BFF — бэкенд» |
-| `graphql-client-codegen` | запросы к бэкенду, типы из `schema.graphql` |
+| `graphql-client-codegen` | запросы к бэкенду, типы из пакета `@keitaro-wrapper/contracts` |
 | `design-tokens` | цвета, шрифты, отступы, темы |
 | `editor-ui-states` | отображение потока и оффера: не опубликовано, removed, закрепление |
 | `qa-e2e` | сквозные сценарии и проверка в браузере |

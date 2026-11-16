@@ -1,52 +1,36 @@
 ---
 name: graphql-strawberry
-description: Схема GraphQL на Strawberry внутри FastAPI — типы, запросы, мутации, предметные ошибки через union, выгрузка schema.graphql. Использовать при любой правке backend/app/graphql/ и при изменении контракта с фронтом. Перед использованием незнакомой возможности Strawberry сверяться с документацией через context7.
+description: GraphQL на Strawberry внутри FastAPI — резолверы поверх типов из пакета контрактов, отображение домена в типы, предметные ошибки через union, тест соответствия контракту. Использовать при любой правке backend/app/graphql/. Перед использованием незнакомой возможности Strawberry сверяться с документацией через context7.
 ---
 
-# GraphQL в проекте
+# GraphQL в бэкенде
 
-## Устройство
+## Типы — из контракта
 
-- Один объект `schema = strawberry.Schema(query=Query, mutation=Mutation)` в `app/graphql/schema.py`.
-- Подключение: `GraphQLRouter(schema, context_getter=...)` на `/graphql`. Контекст несёт сервисы.
-- Типы — `@strawberry.type` с аннотациями Python; имена полей в схеме — camelCase (делает Strawberry).
-- Тип GraphQL строится из доменной модели функцией `from_domain`, а не наследованием.
+Типы, input-ы, enum и union объявлены в `contracts/schema.graphql` и сгенерированы в `keitaro_contracts.types`. Бэкенд их импортирует и **не объявляет своих**. Нужен новый тип или поле — сначала скилл `contract-change` в `../contracts/`, потом резолвер.
 
-## Контракт
-
-`backend/schema.graphql` лежит в git и выгружается командой:
-
-```
-uv run strawberry export-schema app.graphql.schema:schema > schema.graphql
+```python
+from keitaro_contracts import types as gql
 ```
 
-Тест сравнивает файл с текущей схемой. Изменил типы — перевыгрузи файл в том же коммите. Фронт генерирует из него типы, поэтому удаление или переименование поля — ломающее изменение: сначала правка BFF.
+## Что пишет бэкенд
+
+- `app/graphql/schema.py` — `Query` и `Mutation` с резолверами и `schema = strawberry.Schema(...)`. Сигнатуры (имена, аргументы, значения по умолчанию, описания полей) повторяют контракт.
+- `app/graphql/mappers.py` — функции «доменная модель → тип контракта» (`to_offer(offer) -> gql.Offer`). В сгенерированные типы методы не добавляются.
+- `app/graphql/context.py` — контекст с сервисами.
+- `app/graphql/errors.py` — расширение `ErrorCodes`: код в `extensions`, текст непредметных ошибок скрыт.
+
+Резолвер: разобрать вход → вызвать один метод сервиса → отобразить результат или предметную ошибку в тип контракта.
+
+## Соответствие контракту
+
+`tests/graphql/test_contract_conformance.py` сравнивает схему бэкенда со схемой пакета (обе нормализованы и отсортированы). Тест красный, если резолвер отсутствует, лишний или расходится в аргументах и описаниях. Чинить расхождение правкой резолвера; если не прав контракт — правкой контракта.
 
 ## Ошибки
 
-Предметные ошибки — часть схемы, а не `errors[]`:
-
-```python
-@strawberry.type
-class ShareOverflow:
-    message: str
-    pinned_total: int
-
-StreamResult = Annotated[Stream | ShareOverflow | OfferAlreadyInStream | DraftNotPublished | KeitaroFailure,
-                         strawberry.union("StreamResult")]
-```
-
-- Каждая мутация редактора возвращает `StreamResult`: поток целиком или типизированную ошибку.
-- `errors[]` остаётся для сбоев, которых клиент не ждёт (ошибка в коде, недоступная база).
-- У каждого типа ошибки есть `message` для показа человеку.
-
-## Запросы и мутации
-
-- Запросы: `campaigns`, `campaign(id)`, `offers(search)`, `domains`, `groups`, `trafficSources`, `countries`.
-- Мутации: `createCampaign`, `fetchStreams`, `addOffer`, `removeOffer`, `bringBackOffer`, `setShare`, `unpinShare`, `cancelStream`, `pushStream`.
-- Вход мутации — один `@strawberry.input`.
-- ID наружу — `strawberry.ID`; ID Keitaro — отдельное целое поле `keitaroId`.
+- Предметные ошибки — варианты union результата мутации (`ShareOverflow`, `OfferAlreadyInStream`, …): сервис бросает `DomainError`, резолвер ловит ожидаемые и возвращает тип контракта.
+- `errors[]` остаётся для сбоев, которых клиент не ждёт; у каждой записи `extensions.code`.
 
 ## Тесты
 
-Через `schema.execute(...)` с подставленным контекстом: проверяется ответ GraphQL, а не вызовы сервиса.
+Через `schema.execute(...)` с подставленным контекстом (`FakeKeitaro`, хранилище в памяти): проверяется ответ GraphQL, а не вызовы сервиса.
