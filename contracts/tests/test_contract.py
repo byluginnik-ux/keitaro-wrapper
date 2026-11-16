@@ -1,6 +1,7 @@
 import json
 from importlib.metadata import version
 from pathlib import Path
+from typing import cast
 
 import strawberry
 from graphql import (
@@ -9,8 +10,11 @@ from graphql import (
     build_schema,
     is_introspection_type,
     is_specified_scalar_type,
+    is_union_type,
     print_type,
 )
+from strawberry.tools import create_type
+from strawberry.types.field import StrawberryField
 
 from keitaro_contracts import load_schema_sdl, types
 
@@ -32,6 +36,17 @@ def shared_types(schema: GraphQLSchema) -> dict[str, GraphQLNamedType]:
     }
 
 
+def returning(kind: object, name: str) -> StrawberryField:
+    """Build a field of that type: a union enters a schema only through a field."""
+
+    def resolver() -> None:
+        raise NotImplementedError
+
+    resolver.__annotations__["return"] = kind
+    field = strawberry.field(resolver=resolver, name=f"probe{name}")
+    return cast("StrawberryField", field)  # the overload reports the resolver's own return type
+
+
 def test_schema_is_valid_graphql_with_a_query_root() -> None:
     """R-ARCH-02."""
     assert contract().query_type is not None
@@ -40,13 +55,11 @@ def test_schema_is_valid_graphql_with_a_query_root() -> None:
 def test_python_types_are_exactly_the_schema_types() -> None:
     """R-ARCH-02, R-ARCH-09: generated Strawberry types print back to the same SDL."""
 
-    @strawberry.type
-    class Query:
-        ok: bool
-
     expected = shared_types(contract())
-    python_types = [getattr(types, name) for name in expected]
-    actual = strawberry.Schema(query=Query, types=python_types)._schema.type_map  # noqa: SLF001  # pyright: ignore[reportPrivateUsage] — no public access to the core schema
+    unions = {name for name, kind in expected.items() if is_union_type(kind)}
+    query = create_type("Query", [returning(getattr(types, name), name) for name in unions])
+    python_types = [getattr(types, name) for name in expected if name not in unions]
+    actual = strawberry.Schema(query=query, types=python_types)._schema.type_map  # noqa: SLF001  # pyright: ignore[reportPrivateUsage] — no public access to the core schema
 
     assert expected
     for name, kind in expected.items():

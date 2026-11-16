@@ -32,6 +32,65 @@ type Country {
   name: String!
 }
 
+"""Кампания, которую ведёт сервис"""
+type Campaign {
+  """Наш идентификатор"""
+  id: ID!
+
+  """Идентификатор кампании в Keitaro"""
+  keitaroId: Int!
+  name: String!
+
+  """Псевдоним в адресе кампании"""
+  alias: String!
+
+  """Код страны alpha-2, заданный при создании"""
+  country: String
+}
+
+"""Что создать: кампания с двумя потоками"""
+input CreateCampaignInput {
+  """Название с обязательным префиксом тестовых кампаний"""
+  name: String!
+
+  """Код страны alpha-2: её посетителей первый поток уводит на Google"""
+  country: String!
+
+  """Оффер второго потока"""
+  offerId: Int!
+  groupId: Int!
+  trafficSourceId: Int!
+
+  """Существующий домен. Задаётся ровно одно из двух: domainId или newDomainName"""
+  domainId: Int
+
+  """Имя хоста нового домена: он создаётся в Keitaro перед кампанией"""
+  newDomainName: String
+}
+
+"""Замечание к одному полю ввода"""
+type FieldError {
+  """Имя поля входного типа"""
+  field: String!
+  message: String!
+}
+
+"""Ввод не прошёл проверку; в Keitaro ничего не изменено"""
+type ValidationFailed {
+  message: String!
+  fields: [FieldError!]!
+}
+
+"""Keitaro отказал или не ответил; незавершённых кампаний в трекере не оставлено"""
+type KeitaroFailure {
+  message: String!
+
+  """Домен, который успел создаться до сбоя и остался в трекере"""
+  createdDomain: Domain
+}
+
+union CreateCampaignResult = Campaign | ValidationFailed | KeitaroFailure
+
 type Query {
   """Домены трекера, на которых можно разместить кампанию"""
   domains: [Domain!]!
@@ -47,4 +106,9 @@ type Query {
 
   """Страны: поиск по названию или началу кода"""
   countries(search: String! = ""): [Country!]!
+}
+
+type Mutation {
+  """Создать кампанию: поток 1 уводит страну на Google, поток 2 ведёт на оффер"""
+  createCampaign(input: CreateCampaignInput!): CreateCampaignResult!
 }

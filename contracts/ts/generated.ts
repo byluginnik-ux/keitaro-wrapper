@@ -10,6 +10,20 @@ export type Scalars = {
   Float: { input: number; output: number; }
 };
 
+/** Кампания, которую ведёт сервис */
+export type Campaign = {
+  __typename?: 'Campaign';
+  /** Псевдоним в адресе кампании */
+  alias: Scalars['String']['output'];
+  /** Код страны alpha-2, заданный при создании */
+  country?: Maybe<Scalars['String']['output']>;
+  /** Наш идентификатор */
+  id: Scalars['ID']['output'];
+  /** Идентификатор кампании в Keitaro */
+  keitaroId: Scalars['Int']['output'];
+  name: Scalars['String']['output'];
+};
+
 /** Страна ISO 3166-1 */
 export type Country = {
   __typename?: 'Country';
@@ -18,6 +32,24 @@ export type Country = {
   name: Scalars['String']['output'];
 };
 
+/** Что создать: кампания с двумя потоками */
+export type CreateCampaignInput = {
+  /** Код страны alpha-2: её посетителей первый поток уводит на Google */
+  country: Scalars['String']['input'];
+  /** Существующий домен. Задаётся ровно одно из двух: domainId или newDomainName */
+  domainId?: InputMaybe<Scalars['Int']['input']>;
+  groupId: Scalars['Int']['input'];
+  /** Название с обязательным префиксом тестовых кампаний */
+  name: Scalars['String']['input'];
+  /** Имя хоста нового домена: он создаётся в Keitaro перед кампанией */
+  newDomainName?: InputMaybe<Scalars['String']['input']>;
+  /** Оффер второго потока */
+  offerId: Scalars['Int']['input'];
+  trafficSourceId: Scalars['Int']['input'];
+};
+
+export type CreateCampaignResult = Campaign | KeitaroFailure | ValidationFailed;
+
 /** Домен трекера, на котором размещается кампания */
 export type Domain = {
   __typename?: 'Domain';
@@ -25,11 +57,38 @@ export type Domain = {
   name: Scalars['String']['output'];
 };
 
+/** Замечание к одному полю ввода */
+export type FieldError = {
+  __typename?: 'FieldError';
+  /** Имя поля входного типа */
+  field: Scalars['String']['output'];
+  message: Scalars['String']['output'];
+};
+
 /** Группа кампаний */
 export type Group = {
   __typename?: 'Group';
   id: Scalars['Int']['output'];
   name: Scalars['String']['output'];
+};
+
+/** Keitaro отказал или не ответил; незавершённых кампаний в трекере не оставлено */
+export type KeitaroFailure = {
+  __typename?: 'KeitaroFailure';
+  /** Домен, который успел создаться до сбоя и остался в трекере */
+  createdDomain?: Maybe<Domain>;
+  message: Scalars['String']['output'];
+};
+
+export type Mutation = {
+  __typename?: 'Mutation';
+  /** Создать кампанию: поток 1 уводит страну на Google, поток 2 ведёт на оффер */
+  createCampaign: CreateCampaignResult;
+};
+
+
+export type MutationCreateCampaignArgs = {
+  input: CreateCampaignInput;
 };
 
 /** Оффер, заведённый в Keitaro */
@@ -69,4 +128,11 @@ export type TrafficSource = {
   __typename?: 'TrafficSource';
   id: Scalars['Int']['output'];
   name: Scalars['String']['output'];
+};
+
+/** Ввод не прошёл проверку; в Keitaro ничего не изменено */
+export type ValidationFailed = {
+  __typename?: 'ValidationFailed';
+  fields: Array<FieldError>;
+  message: Scalars['String']['output'];
 };

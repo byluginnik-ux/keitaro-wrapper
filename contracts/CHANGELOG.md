@@ -2,6 +2,11 @@
 
 Версия одна для npm-пакета и пакета Python. Удаление или переименование — мажорная, добавление — минорная.
 
+## 0.2.0
+
+- Мутация `createCampaign(input)` с результатом `CreateCampaignResult = Campaign | ValidationFailed | KeitaroFailure`.
+- Типы `Campaign`, `CreateCampaignInput`, `FieldError`, `ValidationFailed`, `KeitaroFailure`.
+
 ## 0.1.0
 
 - Справочники: `Domain`, `Group`, `TrafficSource`, `Offer`, `Country`.
