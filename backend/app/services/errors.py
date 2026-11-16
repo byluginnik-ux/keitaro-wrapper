@@ -16,3 +16,13 @@ class ShareOverflowError(DomainError):
         )
         self.pinned_total = pinned_total
         self.free_count = free_count
+
+
+class KeitaroError(DomainError):
+    """Keitaro refused the request, answered with garbage or did not answer at all (R-KT-02)."""
+
+    code = "keitaro_error"
+
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status

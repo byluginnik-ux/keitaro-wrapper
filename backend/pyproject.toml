@@ -5,6 +5,8 @@ description = "GraphQL backend for the Keitaro campaign creator and offer editor
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.115",
+    "httpx>=0.28",
+    "pydantic>=2.10",
     "uvicorn[standard]>=0.32",
 ]
 
@@ -15,6 +17,7 @@ dev = [
     "hypothesis>=6.170.15",
     "pyright>=1.1.390",
     "pytest>=8.3",
+    "respx>=0.23.1",
     "ruff>=0.8",
 ]
 
@@ -31,7 +34,8 @@ extend-exclude = [".agents"]
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
-    "D100", "D104", "D107", "D203", "D213",  # module, package and __init__ docstrings are optional
+    "D100", "D101", "D102", "D104", "D107",  # docstrings are required for public functions only
+    "D203", "D213",                          # pick one docstring style
     "COM812", "ISC001",              # conflict with the formatter
     "RUF001", "RUF002", "RUF003",    # Cyrillic in strings, docstrings and comments is intended
     "CPY",                           # no copyright headers
