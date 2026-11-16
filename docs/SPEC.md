@@ -236,7 +236,7 @@ Admin API: база `{KEITARO_BASE_URL}/admin_api/v1`, заголовок `Api-K
 | R-UX-01 … R-UX-05 | F10 | `frontend/tests/app/creator.test.ts`, `frontend/tests/app/ui.test.ts`, `frontend/tests/e2e/creator.spec.ts` |
 | R-UX-10 … R-UX-16 | F11 | `frontend/tests/app/editor.test.ts`; сценарии S1–S8 и работа с клавиатуры — `frontend/tests/e2e/editor.spec.ts` |
 | R-Q-02, R-Q-04, R-Q-06 | F00 | `.pre-commit-config.yaml`, `.github/workflows/ci.yml`, `backend/tests/test_health.py`, `frontend/tests/server/health.test.ts` |
-| R-Q-01, R-Q-03, R-Q-05 | F12 | — |
+| R-Q-01, R-Q-03, R-Q-05 | F12 | история git (пары `test` → `feat`); `backend/tests/fakes.py`, `backend/tests/fake_tracker.py`; `README.md` |
 | R-Q-07 | F12 | `backend/tests/graphql/test_hardening.py`, `backend/tests/test_app.py` |
 
 ## 12. Допущения
