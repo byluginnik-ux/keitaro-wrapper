@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import type { Option, StreamView } from '../../../shared/types/api'
 import UiBadge from '../ui/UiBadge.vue'
 import UiButton from '../ui/UiButton.vue'
@@ -35,6 +35,26 @@ const locked = computed(() => Boolean(props.pending))
 const taken = computed(() => props.stream.offers.map(offer => offer.offerId))
 const headingId = computed(() => `stream-${props.stream.id}`)
 
+const root = ref<HTMLElement | null>(null)
+let focused: HTMLElement | null = null
+
+// Controls are disabled while a request runs, and a disabled control drops the focus.
+// Put it back when the answer comes, so a keyboard user stays where they were (R-UX-15).
+watch(() => props.pending, async (now, before) => {
+  if (now && !before) {
+    const active = document.activeElement
+    focused = active instanceof HTMLElement && root.value?.contains(active) ? active : null
+    return
+  }
+  if (now || !focused) return
+  const target = focused
+  focused = null
+  await nextTick()
+  if (document.activeElement && document.activeElement !== document.body) return
+  if (target.isConnected && !target.hasAttribute('disabled')) target.focus()
+  else root.value?.focus()
+})
+
 function add(option: Option<number> | null) {
   if (!option) return
   emit('command', { action: 'add', offerId: option.id })
@@ -44,7 +64,9 @@ function add(option: Option<number> | null) {
 
 <template>
   <section
+    ref="root"
     class="stream"
+    tabindex="-1"
     :class="{ 'stream--dirty': stream.dirty }"
     :aria-labelledby="headingId"
   >
@@ -155,6 +177,10 @@ function add(option: Option<number> | null) {
   border-left: 4px solid var(--hair);
   border-radius: var(--r-panel);
   background: var(--mist);
+}
+
+.stream:focus {
+  outline: none;
 }
 
 .stream--dirty {

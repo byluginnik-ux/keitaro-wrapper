@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, ref } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import type { OfferView } from '../../../shared/types/api'
 import UiBadge from '../ui/UiBadge.vue'
 import UiButton from '../ui/UiButton.vue'
@@ -44,8 +44,18 @@ function confirm() {
     return
   }
   emit('pin', Number(draft.value.trim()))
+  confirmed = true
   void leave(true)
 }
+
+// the share button is disabled while the request runs; take the focus back once it is not
+let confirmed = false
+watch(() => props.locked, async (locked) => {
+  if (locked || !confirmed) return
+  confirmed = false
+  await nextTick()
+  opener.value?.focus()
+})
 
 function togglePin() {
   if (props.offer.pinned) emit('unpin')

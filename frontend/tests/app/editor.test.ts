@@ -144,6 +144,20 @@ describe('OfferRow', () => {
     expect(wrapper.find('input').exists()).toBe(false)
   })
 
+  it('takes the focus back to the share once the request is over (R-UX-15)', async () => {
+    const wrapper = row()
+
+    await button(wrapper, /Изменить$/).trigger('click')
+    await wrapper.get('input').setValue('50')
+    await wrapper.get('input').trigger('keydown', { key: 'Enter' })
+    await wrapper.setProps({ locked: true })
+    ;(document.activeElement as HTMLElement | null)?.blur()
+    await wrapper.setProps({ locked: false, offer: offer({ share: 50, pinned: true }) })
+    await wrapper.vm.$nextTick()
+
+    expect(document.activeElement).toBe(button(wrapper, /^Доля оффера Offer A: 50 %/).element)
+  })
+
   it('edits the share in place: Esc drops the input (R-UX-14)', async () => {
     const wrapper = row()
 
@@ -246,6 +260,32 @@ describe('StreamCard', () => {
     expect(wrapper.get('[role="alert"]').text()).toContain('Keitaro ответил 500. Черновик сохранён.')
     expect(wrapper.findAll('li.row')).toHaveLength(3)
     expect(wrapper.get('footer').text()).toContain('Изменений: 1')
+  })
+
+  it('returns the focus to the pressed control when the answer comes (R-UX-15)', async () => {
+    const wrapper = card()
+    const pin = button(wrapper, 'Закрепить долю: Offer C')
+    ;(pin.element as HTMLElement).focus()
+
+    await wrapper.setProps({ pending: 'pin' })
+    ;(document.activeElement as HTMLElement | null)?.blur()
+    await wrapper.setProps({ pending: null })
+    await wrapper.vm.$nextTick()
+
+    expect(document.activeElement).toBe(pin.element)
+  })
+
+  it('keeps the focus in the stream when the pressed control is gone (R-UX-15)', async () => {
+    const wrapper = card({ dirty: true, changes: 1 })
+    const push = button(wrapper, 'Опубликовать')
+    ;(push.element as HTMLElement).focus()
+
+    await wrapper.setProps({ pending: 'push' })
+    ;(document.activeElement as HTMLElement | null)?.blur()
+    await wrapper.setProps({ pending: null, stream: stream() })
+    await wrapper.vm.$nextTick()
+
+    expect(document.activeElement).toBe(wrapper.element)
   })
 
   it('locks its buttons while a request runs and marks the pressed one (R-UX-16)', () => {
