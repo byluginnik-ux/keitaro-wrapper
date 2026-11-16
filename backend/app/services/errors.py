@@ -70,3 +70,27 @@ class DraftNotPublishedError(DomainError):
             "Есть неопубликованные изменения: " + ", ".join(stream_names) + ". "
             "Опубликуйте или отмените их, затем загрузите потоки снова"
         )
+
+
+class StreamNotFoundError(DomainError):
+    """Our storage has no such stream."""
+
+    code = "stream_not_found"
+
+    def __init__(self) -> None:
+        super().__init__("Поток не найден: загрузите потоки кампании заново")
+
+
+class OfferNotFoundError(DomainError):
+    """The tracker has no such active offer, or the stream does not hold it."""
+
+    code = "offer_not_found"
+
+
+class OfferAlreadyInStreamError(DomainError):
+    """The offer already takes traffic in the stream (R-ED-11)."""
+
+    code = "offer_already_in_stream"
+
+    def __init__(self, name: str) -> None:
+        super().__init__(f"Оффер «{name}» уже есть в потоке")

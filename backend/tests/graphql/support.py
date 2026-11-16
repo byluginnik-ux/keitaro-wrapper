@@ -12,9 +12,11 @@ NOW = datetime(2026, 11, 16, 12, 0, tzinfo=UTC)
 PREFIX = "test_bulygin_"
 
 
-def context_for(keitaro: FakeKeitaro, storage: Storage | None = None) -> Context:
+def context_for(
+    keitaro: FakeKeitaro, storage: Storage | None = None, *, offers_ttl: float = 30.0
+) -> Context:
     """Wire real services to the fake tracker and in-memory storage."""
-    catalog = CatalogService(keitaro)
+    catalog = CatalogService(keitaro, offers_ttl=offers_ttl)
     storage = storage or create_memory_storage()
     creator = CreatorService(
         keitaro,

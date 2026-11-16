@@ -80,6 +80,30 @@ class EditorService:
         )
         return FetchedStreams(campaign, sorted(merged, key=lambda stream: stream.position))
 
+    async def add_offer(self, stream_id: UUID, offer_id: int) -> Stream:
+        """Put an offer into the draft; a removed one comes back (R-ED-10, 11)."""
+        raise NotImplementedError
+
+    async def remove_offer(self, stream_id: UUID, offer_id: int) -> Stream:
+        """Take an offer out of the draft, keeping it for bringing back (R-ED-12)."""
+        raise NotImplementedError
+
+    async def bring_back(self, stream_id: UUID, offer_id: int) -> Stream:
+        """Make a removed offer active again (R-ED-13)."""
+        raise NotImplementedError
+
+    async def pin_share(self, stream_id: UUID, offer_id: int, share: int) -> Stream:
+        """Set a share by hand and keep it through recalculation (R-SH-06)."""
+        raise NotImplementedError
+
+    async def unpin_share(self, stream_id: UUID, offer_id: int) -> Stream:
+        """Let the offer take part in recalculation again (R-SH-07)."""
+        raise NotImplementedError
+
+    async def cancel(self, stream_id: UUID) -> Stream:
+        """Return the stream to its published snapshot (R-ED-14)."""
+        raise NotImplementedError
+
     def _adopt(self, theirs: tracker.Campaign) -> Campaign:
         """Describe a campaign made outside this service (R-ED-07)."""
         return Campaign(
