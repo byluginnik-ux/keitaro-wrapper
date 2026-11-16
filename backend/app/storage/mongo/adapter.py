@@ -157,7 +157,7 @@ class MongoStreams:
             await session.with_transaction(write)
 
     async def delete(self, stream_id: UUID) -> None:
-        raise NotImplementedError
+        await self._streams.delete_one({"_id": stream_id})
 
 
 class MongoAudit:

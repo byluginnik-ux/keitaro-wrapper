@@ -45,7 +45,7 @@ class MemoryStreams:
         self.items.update({item.id: item for item in streams})
 
     async def delete(self, stream_id: UUID) -> None:
-        raise NotImplementedError
+        self.items.pop(stream_id, None)
 
 
 class MemoryAudit:

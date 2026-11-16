@@ -157,7 +157,10 @@ class SqlStreams:
             raise LookupError(message) from error
 
     async def delete(self, stream_id: UUID) -> None:
-        raise NotImplementedError
+        async with self._sessions.begin() as session:
+            row = await session.get(StreamRow, stream_id)
+            if row is not None:
+                await session.delete(row)
 
 
 class SqlAudit:
