@@ -69,6 +69,12 @@ export type DraftNotPublished = {
   message: Scalars['String']['output'];
 };
 
+/** В потоке нет активных офферов: публиковать нечего */
+export type EmptyStream = {
+  __typename?: 'EmptyStream';
+  message: Scalars['String']['output'];
+};
+
 export type FetchStreamsResult = CampaignNotFound | DraftNotPublished | KeitaroFailure | StreamsFetched;
 
 /** Замечание к одному полю ввода */
@@ -108,6 +114,8 @@ export type Mutation = {
   fetchStreams: FetchStreamsResult;
   /** Задать долю оффера и закрепить её; остальные доли пересчитываются */
   pinShare: StreamResult;
+  /** Опубликовать черновик: отправить в Keitaro активные офферы потока с их долями */
+  pushStream: StreamResult;
   /** Убрать оффер из черновика: он остаётся в потоке со статусом REMOVED и долей 0 */
   removeOffer: StreamResult;
   /** Снять закрепление; оффер снова участвует в пересчёте */
@@ -142,6 +150,11 @@ export type MutationFetchStreamsArgs = {
 
 export type MutationPinShareArgs = {
   input: PinShareInput;
+};
+
+
+export type MutationPushStreamArgs = {
+  streamId: Scalars['ID']['input'];
 };
 
 
@@ -287,7 +300,7 @@ export type StreamOfferInput = {
   streamId: Scalars['ID']['input'];
 };
 
-export type StreamResult = KeitaroFailure | OfferAlreadyInStream | OfferNotFound | ShareOverflow | Stream | StreamNotFound | ValidationFailed;
+export type StreamResult = EmptyStream | KeitaroFailure | OfferAlreadyInStream | OfferNotFound | ShareOverflow | Stream | StreamNotFound | ValidationFailed;
 
 /** Потоки загружены из Keitaro и сохранены */
 export type StreamsFetched = {

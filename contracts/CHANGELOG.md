@@ -2,6 +2,11 @@
 
 Версия одна для npm-пакета и пакета Python. Удаление или переименование — мажорная, добавление — минорная.
 
+## 0.5.0
+
+- Мутация `pushStream(streamId)`.
+- В `StreamResult` добавлен вариант `EmptyStream` — исчерпывающий разбор результата у потребителя нужно дополнить.
+
 ## 0.4.0
 
 - Мутации черновика: `addOffer`, `removeOffer`, `bringBackOffer`, `pinShare`, `unpinShare`, `cancelDraft`.

@@ -134,6 +134,11 @@ class OfferAlreadyInStream:
     message: str
 
 
+@strawberry.type(description="В потоке нет активных офферов: публиковать нечего")
+class EmptyStream:
+    message: str
+
+
 @strawberry.type(
     description="Закреплённые доли не дают разделить 100 % между активными офферами; черновик не изменён"
 )
@@ -194,6 +199,7 @@ StreamResult = Annotated[
     | OfferNotFound
     | OfferAlreadyInStream
     | ShareOverflow
+    | EmptyStream
     | ValidationFailed
     | KeitaroFailure,
     strawberry.union(name="StreamResult"),

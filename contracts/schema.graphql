@@ -137,6 +137,11 @@ type OfferAlreadyInStream {
   message: String!
 }
 
+"""В потоке нет активных офферов: публиковать нечего"""
+type EmptyStream {
+  message: String!
+}
+
 """Закреплённые доли не дают разделить 100 % между активными офферами; черновик не изменён"""
 type ShareOverflow {
   message: String!
@@ -149,6 +154,7 @@ union StreamResult =
   | OfferNotFound
   | OfferAlreadyInStream
   | ShareOverflow
+  | EmptyStream
   | ValidationFailed
   | KeitaroFailure
 
@@ -260,4 +266,7 @@ type Mutation {
 
   """Отменить черновик: поток возвращается к опубликованному снимку"""
   cancelDraft(streamId: ID!): StreamResult!
+
+  """Опубликовать черновик: отправить в Keitaro активные офферы потока с их долями"""
+  pushStream(streamId: ID!): StreamResult!
 }
