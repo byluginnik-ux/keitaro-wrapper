@@ -117,6 +117,8 @@ function onKeydown(event: KeyboardEvent) {
     case 'Enter':
       if (!open.value) return
       event.preventDefault()
+      // the list still shows the answer to an earlier search
+      if (props.remote && props.loading) return
       return choose(active.value)
     case 'Escape':
       if (!open.value) return

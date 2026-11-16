@@ -148,6 +148,18 @@ describe('UiCombobox', () => {
     expect(names()).toHaveLength(3)
   })
 
+  it('does not choose from a list the server is still replacing', async () => {
+    const { wrapper, input } = combobox({ remote: true, loading: true })
+
+    await input.setValue('flex')
+    await input.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+
+    await wrapper.setProps({ loading: false })
+    await input.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('update:modelValue')).toEqual([[OPTIONS[0]]])
+  })
+
   it('clears the choice when the text is erased', async () => {
     const { wrapper, input } = combobox({ modelValue: OPTIONS[0] })
 
