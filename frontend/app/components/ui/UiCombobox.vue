@@ -226,6 +226,7 @@ function onKeydown(event: KeyboardEvent) {
 <style scoped>
 .combo {
   display: grid;
+  align-content: start;
   gap: 6px;
   min-width: 0;
 }

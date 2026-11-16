@@ -78,6 +78,7 @@ function onInput(event: Event) {
 <style scoped>
 .field {
   display: grid;
+  align-content: start;
   gap: 6px;
   min-width: 0;
 }
