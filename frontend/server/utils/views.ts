@@ -1,44 +1,8 @@
 import type { OfferState } from '@keitaro-wrapper/contracts'
+import type { CampaignView, OfferView, StreamView } from '../../shared/types/api'
 import type { CampaignFieldsFragment, StreamFieldsFragment } from '../graphql/operations'
 
 const REMOVED: OfferState = 'REMOVED'
-
-export interface CampaignView {
-  id: string
-  keitaroId: number
-  name: string
-  alias: string
-  country: string | null
-  /** The campaign in the tracker's own admin panel. */
-  trackerLink: string
-}
-
-export interface OfferView {
-  offerId: number
-  name: string
-  share: number
-  pinned: boolean
-  removed: boolean
-  /** Never published: cancelling the draft makes it disappear. */
-  isNew: boolean
-  changed: boolean
-  publishedShare: number | null
-}
-
-export interface StreamView {
-  id: string
-  keitaroId: number
-  name: string
-  position: number
-  /** False for a redirect stream: it is shown without contents. */
-  acceptsOffers: boolean
-  dirty: boolean
-  /** How many offers a publication would change. */
-  changes: number
-  /** Sum of the shares of active offers, as stored. */
-  total: number
-  offers: OfferView[]
-}
 
 const OFFERS_KIND = 'landings'
 

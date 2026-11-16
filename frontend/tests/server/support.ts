@@ -1,6 +1,6 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core'
 import { expect } from 'vitest'
-import type { ApiError } from '../../server/utils/api-error'
+import type { ApiError } from '../../shared/types/api'
 import { ApiFailure } from '../../server/utils/api-error'
 import type { GraphqlClient } from '../../server/utils/graphql'
 

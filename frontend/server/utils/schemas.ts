@@ -1,5 +1,5 @@
 import * as v from 'valibot'
-import type { FieldRemark } from './api-error'
+import type { FieldRemark } from '../../shared/types/api'
 import { fail } from './api-error'
 
 const id = v.pipe(v.number(), v.integer(), v.minValue(1))

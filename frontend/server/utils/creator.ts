@@ -1,23 +1,10 @@
+import type { CampaignView, CreatorOptions, Option } from '../../shared/types/api'
 import { CreateCampaignDocument, CreatorOptionsDocument, SearchOffersDocument } from '../graphql/operations'
 import { assertNever, fail } from './api-error'
 import { trackerUrl } from './editor'
 import type { GraphqlClient } from './graphql'
 import { campaignInput, offerSearch, parse } from './schemas'
-import type { CampaignView } from './views'
 import { toCampaignView } from './views'
-
-export interface Option<T> {
-  id: T
-  name: string
-}
-
-export interface CreatorOptions {
-  namePrefix: string
-  domains: Option<number>[]
-  groups: Option<number>[]
-  trafficSources: Option<number>[]
-  countries: Option<string>[]
-}
 
 const OFFER_LIMIT = 20
 

@@ -1,14 +1,4 @@
-export interface FieldRemark {
-  field: string
-  message: string
-}
-
-/** The only shape of a refusal the browser ever sees (R-ARCH-05). */
-export interface ApiError {
-  code: string
-  message: string
-  fields?: FieldRemark[]
-}
+import type { ApiError, FieldRemark } from '../../shared/types/api'
 
 export class ApiFailure extends Error {
   constructor(readonly status: number, readonly body: ApiError) {

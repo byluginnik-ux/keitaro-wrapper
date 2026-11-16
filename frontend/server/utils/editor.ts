@@ -1,3 +1,4 @@
+import type { CampaignView, EditorScreen, StreamView } from '../../shared/types/api'
 import type { StreamOutcomeFragment } from '../graphql/operations'
 import {
   AddOfferDocument,
@@ -15,13 +16,7 @@ import {
 import { assertNever, fail } from './api-error'
 import type { GraphqlClient } from './graphql'
 import { fetchInput, offerBody, offerRef, parse, shareBody, streamRef } from './schemas'
-import type { CampaignView, StreamView } from './views'
 import { toCampaignView, toStreamView } from './views'
-
-export interface EditorScreen {
-  campaign: CampaignView
-  streams: StreamView[]
-}
 
 export type StreamAction = 'add' | 'remove' | 'restore' | 'pin' | 'unpin' | 'cancel' | 'push'
 
