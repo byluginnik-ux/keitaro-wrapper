@@ -6,6 +6,7 @@ from app.graphql import mappers
 from app.graphql.context import Context
 from app.graphql.errors import ErrorCodes
 from app.services.countries import search_countries
+from app.services.errors import KeitaroError, ValidationError
 
 type AppInfo = Info[Context, None]
 
@@ -37,4 +38,25 @@ class Query:
         return [mappers.to_country(item) for item in search_countries(search)]
 
 
-schema = strawberry.Schema(query=Query, extensions=[ErrorCodes])
+@strawberry.type
+class Mutation:
+    """Resolvers of the contract's Mutation; a business refusal is returned, not raised."""
+
+    @strawberry.mutation(
+        description="Создать кампанию: поток 1 уводит страну на Google, поток 2 ведёт на оффер"
+    )
+    async def create_campaign(
+        self,
+        info: AppInfo,
+        input: gql.CreateCampaignInput,  # noqa: A002 — the argument name is fixed by the contract
+    ) -> gql.CreateCampaignResult:
+        try:
+            campaign = await info.context.creator.create(mappers.to_new_campaign_request(input))
+        except ValidationError as error:
+            return mappers.to_validation_failed(error)
+        except KeitaroError as error:
+            return mappers.to_keitaro_failure(error)
+        return mappers.to_campaign(campaign)
+
+
+schema = strawberry.Schema(query=Query, mutation=Mutation, extensions=[ErrorCodes])
