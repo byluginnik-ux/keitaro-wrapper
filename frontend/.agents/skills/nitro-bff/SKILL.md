@@ -21,7 +21,7 @@ description: Сервер Nitro как BFF — что он делает и че�
   | предметная ошибка из union (`ShareOverflow`, `OfferAlreadyInStream`, `DraftNotPublished`, `EmptyStream`) | 409 или 422 |
   | `KeitaroFailure` | 502 |
   | бэкенд недоступен или `errors[]` | 502, `code: "backend_unavailable"` |
-- **Кэширует справочники** на короткий срок (`defineCachedFunction`, десятки секунд). Потоки и офферы потока не кэшируются.
+- **Не кэширует.** Список офферов кэширует бэкенд (R-KT-07); домены, группы и источники запрашиваются при каждом открытии формы, чтобы только что созданный домен был виден сразу.
 - **Прячет бэкенд:** адрес — в `runtimeConfig.backendGraphqlUrl` (серверная часть), в ответы и в браузер не попадает.
 
 ## Не делает
@@ -36,14 +36,17 @@ description: Сервер Nitro как BFF — что он делает и че�
 ## Устройство маршрута
 
 ```
-server/api/campaigns/[id]/editor.get.ts          экран редактора
-server/api/streams/[id]/offers.post.ts           добавить оффер → поток
-server/api/streams/[id]/push.post.ts             опубликовать → поток
-server/api/creator/options.get.ts                справочники формы
-server/api/campaigns.post.ts                     создать кампанию
+server/api/creator/options.get.ts                        справочники формы
+server/api/offers.get.ts                                 поиск офферов
+server/api/campaigns/index.get.ts | index.post.ts        список | создать кампанию
+server/api/campaigns/fetch.post.ts                       загрузить потоки по ID кампании в Keitaro
+server/api/campaigns/[id]/editor.get.ts                  экран редактора
+server/api/streams/[id]/offers/index.post.ts             добавить оффер → поток
+server/api/streams/[id]/offers/[offerId]/…               index.delete, restore.post, pin.put, pin.delete
+server/api/streams/[id]/cancel.post.ts | push.post.ts    отменить | опубликовать → поток
 ```
 
-Обработчик: разобрать параметры → проверить схемой → вызвать функцию из `server/utils/` с типизированным документом GraphQL → вернуть модель экрана. Каждое действие редактора возвращает поток целиком.
+Маршрут — одна строка: `defineApiHandler` (`server/utils/handler.ts`) даёт клиент GraphQL и превращает `ApiFailure` в статус. Вся работа — в функции из `server/utils/` (`creator.ts`, `editor.ts`): проверить ввод схемой из `schemas.ts` → вызвать типизированный документ → вернуть модель экрана из `views.ts`. Каждое действие редактора возвращает поток целиком.
 
 Типы ответа выводятся Nitro: в компоненте `useFetch('/api/...')` уже типизирован, отдельные интерфейсы для клиента не пишутся.
 

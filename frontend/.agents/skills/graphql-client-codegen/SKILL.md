@@ -7,7 +7,7 @@ description: Запросы BFF к GraphQL бэкенда — типы из па
 
 ## Источник типов
 
-Пакет `@keitaro-wrapper/contracts` (`../contracts`, подключён как `link:`). Базовые типы (`Stream`, `Offer`, union-ошибки) импортируются из него и здесь не объявляются:
+Пакет `@keitaro-wrapper/contracts` (`../contracts`, подключён как `link:`). Схему для генерации `codegen.yml` читает из пакета; базовые типы при необходимости импортируются из него и здесь не объявляются:
 
 ```ts
 import type { Offer, Stream } from '@keitaro-wrapper/contracts'

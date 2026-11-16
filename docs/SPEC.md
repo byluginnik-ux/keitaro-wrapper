@@ -231,7 +231,7 @@ Admin API: база `{KEITARO_BASE_URL}/admin_api/v1`, заголовок `Api-K
 | R-ED-10 … R-ED-16, R-SH-06 … R-SH-08, S2, S4, S5, S7, S8 | F08 | `backend/tests/services/test_editor_draft.py`, `backend/tests/graphql/test_draft_mutations.py` |
 | R-ED-20 … R-ED-24, S3, S5 | F09 | `backend/tests/services/test_editor_push.py`, `backend/tests/graphql/test_draft_mutations.py` |
 | R-UX-20 … R-UX-24 | F10a | — |
-| R-ARCH-04, R-ARCH-05 | F10b | — |
+| R-ARCH-04, R-ARCH-05 | F10b | `frontend/tests/server/graphql.test.ts`, `frontend/tests/server/creator.test.ts`, `frontend/tests/server/editor.test.ts` |
 | R-UX-01 … R-UX-05 | F10 | — |
 | R-UX-10 … R-UX-16 | F11 | — |
 | R-Q-02, R-Q-04, R-Q-06 | F00 | `.pre-commit-config.yaml`, `.github/workflows/ci.yml`, `backend/tests/test_health.py`, `frontend/tests/server/health.test.ts` |
