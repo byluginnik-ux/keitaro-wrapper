@@ -1,0 +1,53 @@
+default_install_hook_types: [pre-commit, commit-msg]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: end-of-file-fixer
+        exclude: ^(backend|frontend)/\.agents/skills/
+      - id: trailing-whitespace
+        exclude: (\.md$|^(backend|frontend)/\.agents/skills/)
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.5.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+
+  - repo: local
+    hooks:
+      - id: backend-ruff
+        name: backend · ruff check
+        entry: bash -c 'cd backend && uv run ruff check . && uv run ruff format --check .'
+        language: system
+        files: ^backend/.*\.(py|toml)$
+        pass_filenames: false
+      - id: backend-pyright
+        name: backend · pyright
+        entry: bash -c 'cd backend && uv run pyright'
+        language: system
+        files: ^backend/.*\.(py|toml)$
+        pass_filenames: false
+      - id: frontend-eslint
+        name: frontend · eslint
+        entry: bash -c 'cd frontend && corepack pnpm lint'
+        language: system
+        files: ^frontend/.*\.(ts|vue|mjs|json)$
+        exclude: ^frontend/\.agents/
+        pass_filenames: false
+      - id: frontend-typecheck
+        name: frontend · typecheck
+        entry: bash -c 'cd frontend && corepack pnpm typecheck'
+        language: system
+        files: ^frontend/.*\.(ts|vue)$
+        exclude: ^frontend/\.agents/
+        pass_filenames: false

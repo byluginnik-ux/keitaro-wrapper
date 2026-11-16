@@ -210,7 +210,8 @@ Admin API: база `{KEITARO_BASE_URL}/admin_api/v1`, заголовок `Api-K
 | R-ARCH-04, R-ARCH-05 | F10b | — |
 | R-UX-01 … R-UX-04 | F10 | — |
 | R-UX-10 … R-UX-16 | F11 | — |
-| R-Q-01 … R-Q-06 | F00, F12 | — |
+| R-Q-02, R-Q-04, R-Q-06 | F00 | `.pre-commit-config.yaml`, `.github/workflows/ci.yml`, `backend/tests/test_health.py`, `frontend/tests/server/health.test.ts` |
+| R-Q-01, R-Q-03, R-Q-05 | F12 | — |
 
 ## 12. Допущения
 
