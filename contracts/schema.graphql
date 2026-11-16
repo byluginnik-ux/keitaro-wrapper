@@ -216,7 +216,19 @@ type KeitaroFailure {
 
 union CreateCampaignResult = Campaign | ValidationFailed | KeitaroFailure
 
+"""Настройки сервиса, которые нужны интерфейсу"""
+type ServiceInfo {
+  """Обязательное начало названия кампании"""
+  campaignNamePrefix: String!
+
+  """Адрес трекера без пути: по нему строятся ссылки в админку Keitaro"""
+  trackerUrl: String!
+}
+
 type Query {
+  """Настройки сервиса, которые нужны интерфейсу"""
+  serviceInfo: ServiceInfo!
+
   """Домены трекера, на которых можно разместить кампанию"""
   domains: [Domain!]!
 

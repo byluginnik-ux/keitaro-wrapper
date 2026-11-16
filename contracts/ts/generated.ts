@@ -220,6 +220,8 @@ export type Query = {
   groups: Array<Group>;
   /** Активные офферы: поиск по фрагменту названия или началу ID */
   offers: Array<Offer>;
+  /** Настройки сервиса, которые нужны интерфейсу */
+  serviceInfo: ServiceInfo;
   /** Потоки кампании в том виде, в каком они сохранены у нас, по порядку */
   streams: Array<Stream>;
   /** Источники трафика */
@@ -245,6 +247,15 @@ export type QueryOffersArgs = {
 
 export type QueryStreamsArgs = {
   campaignId: Scalars['ID']['input'];
+};
+
+/** Настройки сервиса, которые нужны интерфейсу */
+export type ServiceInfo = {
+  __typename?: 'ServiceInfo';
+  /** Обязательное начало названия кампании */
+  campaignNamePrefix: Scalars['String']['output'];
+  /** Адрес трекера без пути: по нему строятся ссылки в админку Keitaro */
+  trackerUrl: Scalars['String']['output'];
 };
 
 /** Закреплённые доли не дают разделить 100 % между активными офферами; черновик не изменён */

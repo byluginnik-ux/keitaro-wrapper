@@ -188,6 +188,16 @@ class FieldError:
     message: str
 
 
+@strawberry.type(description="Настройки сервиса, которые нужны интерфейсу")
+class ServiceInfo:
+    campaign_name_prefix: str = strawberry.field(
+        description="Обязательное начало названия кампании"
+    )
+    tracker_url: str = strawberry.field(
+        description="Адрес трекера без пути: по нему строятся ссылки в админку Keitaro"
+    )
+
+
 FetchStreamsResult = Annotated[
     StreamsFetched | DraftNotPublished | CampaignNotFound | KeitaroFailure,
     strawberry.union(name="FetchStreamsResult"),
