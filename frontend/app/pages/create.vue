@@ -105,6 +105,7 @@ async function again() {
 <style scoped>
 .page {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--gap-3);
 }
 </style>

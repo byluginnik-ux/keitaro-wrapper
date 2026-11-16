@@ -30,6 +30,11 @@ ol {
   list-style: none;
 }
 
+h1,
+h2 {
+  overflow-wrap: anywhere;
+}
+
 h1 {
   font: 700 1.75rem / 2.125rem var(--sans);
 }

@@ -85,6 +85,7 @@
 
 .shell__main {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--gap-3);
   padding-top: var(--gap-3);
 }
