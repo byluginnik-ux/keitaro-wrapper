@@ -34,6 +34,7 @@
     "@graphql-codegen/typed-document-node": "^8.0.0",
     "@graphql-codegen/typescript-operations": "^7.0.1",
     "@nuxt/eslint": "^1.17.0",
+    "@playwright/test": "^1.65.1",
     "@vitejs/plugin-vue": "^6.0.11",
     "@vue/test-utils": "^2.6.0",
     "eslint": "^9.0.0",
