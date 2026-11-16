@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,3 +12,6 @@ class Settings(BaseSettings):
     keitaro_api_key: str
     campaign_name_prefix: str = "test_bulygin_"
     debug: bool = False
+
+    storage_backend: Literal["postgres", "memory"] = "postgres"
+    database_url: str = "postgresql+asyncpg://keitaro:keitaro@db:5432/keitaro"

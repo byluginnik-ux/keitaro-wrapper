@@ -9,6 +9,7 @@ from app.graphql.schema import schema
 from app.keitaro.client import KeitaroClient, create_http_client
 from app.services.catalog import CatalogService
 from app.settings import Settings
+from app.storage.factory import open_storage
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -17,8 +18,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-        async with create_http_client(config.keitaro_base_url, config.keitaro_api_key) as http:
+        async with (
+            create_http_client(config.keitaro_base_url, config.keitaro_api_key) as http,
+            open_storage(config) as storage,
+        ):
             app.state.catalog = CatalogService(KeitaroClient(http))
+            app.state.storage = storage
             yield
 
     def context(request: Request) -> Context:

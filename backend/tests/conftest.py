@@ -14,7 +14,11 @@ def anyio_backend() -> str:
 
 @pytest.fixture
 def settings() -> Settings:
-    return Settings(keitaro_base_url="https://tracker.test", keitaro_api_key="fake-key")
+    return Settings(
+        keitaro_base_url="https://tracker.test",
+        keitaro_api_key="fake-key",
+        storage_backend="memory",
+    )
 
 
 @pytest.fixture
