@@ -222,11 +222,11 @@ Admin API: база `{KEITARO_BASE_URL}/admin_api/v1`, заголовок `Api-K
 | R-ARCH-03 | F02 | `backend/tests/graphql/test_contract_conformance.py`, `backend/tests/graphql/test_catalog_queries.py` |
 | R-KT-01 … R-KT-04, R-KT-06 | F01 | `backend/tests/keitaro/test_client.py` |
 | R-KT-07 | F02 | `backend/tests/services/test_catalog.py`, `backend/tests/services/test_countries.py` |
-| R-KT-05 | F07 | — |
+| R-KT-05 | F07 | `backend/tests/services/test_editor_fetch.py` |
 | R-ST-01 … R-ST-05 | F03, F04 | `backend/tests/storage/test_contract.py` (один набор для всех адаптеров) |
 | R-CR-01 … R-CR-12 | F05 | `backend/tests/services/test_creator.py`, `backend/tests/graphql/test_create_campaign.py` |
 | R-SH-01 … R-SH-09, S7, S8 | F06 | `backend/tests/services/test_shares.py` |
-| R-ED-01 … R-ED-08, S1, S6 | F07 | — |
+| R-ED-01 … R-ED-08, S1, S6 | F07 | `backend/tests/services/test_editor_fetch.py`, `backend/tests/graphql/test_fetch_streams.py` |
 | R-ED-10 … R-ED-15, S2, S4, S5 | F08 | — |
 | R-ED-20 … R-ED-24, S3 | F09 | — |
 | R-UX-20 … R-UX-24 | F10a | — |
