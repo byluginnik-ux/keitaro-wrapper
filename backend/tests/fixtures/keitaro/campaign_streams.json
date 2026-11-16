@@ -1,0 +1,85 @@
+[
+  {
+    "id": 564220,
+    "type": "regular",
+    "name": "Flow 1",
+    "campaign_id": 93212,
+    "position": 1,
+    "action_options": null,
+    "comments": "",
+    "state": "active",
+    "created_at": "2026-10-26 11:22:51",
+    "action_type": "http",
+    "action_payload": "https://google.com",
+    "schema": "redirect",
+    "collect_clicks": true,
+    "filter_or": false,
+    "weight": 100,
+    "offer_selection": "before_click",
+    "filters": [
+      {
+        "id": 1383153,
+        "stream_id": 564220,
+        "name": "country",
+        "mode": "accept",
+        "payload": [
+          "AU"
+        ],
+        "oid": 1383153
+      }
+    ],
+    "triggers": [],
+    "landings": [],
+    "offers": []
+  },
+  {
+    "id": 564221,
+    "type": "regular",
+    "name": "Flow 2",
+    "campaign_id": 93212,
+    "position": 2,
+    "action_options": null,
+    "comments": "",
+    "state": "active",
+    "created_at": "2026-10-26 11:22:51",
+    "action_type": "http",
+    "action_payload": "",
+    "schema": "landings",
+    "collect_clicks": true,
+    "filter_or": false,
+    "weight": 100,
+    "offer_selection": "before_click",
+    "filters": [],
+    "triggers": [],
+    "landings": [],
+    "offers": [
+      {
+        "id": 906140,
+        "stream_id": 564221,
+        "offer_id": 11111,
+        "state": "active",
+        "share": 34,
+        "created_at": "2025-11-19 10:46:25",
+        "updated_at": "2025-11-19 10:49:39"
+      },
+      {
+        "id": 906141,
+        "stream_id": 564221,
+        "offer_id": 11112,
+        "state": "active",
+        "share": 33,
+        "created_at": "2025-11-19 10:46:25",
+        "updated_at": "2025-11-19 10:49:39"
+      },
+      {
+        "id": 906142,
+        "stream_id": 564221,
+        "offer_id": 11113,
+        "state": "active",
+        "share": 33,
+        "created_at": "2025-11-19 10:46:25",
+        "updated_at": "2025-11-19 10:49:39"
+      }
+    ]
+  }
+]
