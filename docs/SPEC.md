@@ -232,8 +232,8 @@ Admin API: база `{KEITARO_BASE_URL}/admin_api/v1`, заголовок `Api-K
 | R-ED-20 … R-ED-24, S3, S5 | F09 | `backend/tests/services/test_editor_push.py`, `backend/tests/graphql/test_draft_mutations.py` |
 | R-UX-20 … R-UX-24 | F10a | `frontend/tests/app/tokens.test.ts`, `frontend/tests/app/ui.test.ts`; R-UX-21, 23, 24 — проверка в браузере (F12) |
 | R-ARCH-04, R-ARCH-05 | F10b | `frontend/tests/server/graphql.test.ts`, `frontend/tests/server/creator.test.ts`, `frontend/tests/server/editor.test.ts` |
-| R-UX-01 … R-UX-05 | F10 | `frontend/tests/app/creator.test.ts`, `frontend/tests/app/ui.test.ts`; сквозной сценарий — F12 |
-| R-UX-10 … R-UX-16 | F11 | — |
+| R-UX-01 … R-UX-05 | F10 | `frontend/tests/app/creator.test.ts`, `frontend/tests/app/ui.test.ts`, `frontend/tests/e2e/creator.spec.ts` |
+| R-UX-10 … R-UX-16 | F11 | `frontend/tests/app/editor.test.ts`; сценарии S1–S8 и работа с клавиатуры — `frontend/tests/e2e/editor.spec.ts` |
 | R-Q-02, R-Q-04, R-Q-06 | F00 | `.pre-commit-config.yaml`, `.github/workflows/ci.yml`, `backend/tests/test_health.py`, `frontend/tests/server/health.test.ts` |
 | R-Q-01, R-Q-03, R-Q-05 | F12 | — |
 
