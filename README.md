@@ -9,7 +9,7 @@
 
 - `contracts/` — контракт GraphQL: `schema.graphql` и сгенерированные из него типы Python и TypeScript. Собирается в npm-пакет и пакет Python; единственное место правки общих типов.
 - `backend/` — FastAPI, GraphQL (Strawberry), SQLAlchemy + Alembic; второй адаптер хранилища — MongoDB.
-- `frontend/` — Nuxt (Vue 3 + TypeScript); сервер Nitro — BFF между браузером и бэкендом.
+- `frontend/` — Nuxt (Vue 3 + TypeScript). Nitro — серверная часть самого Nuxt, а не отдельный сервис: маршруты `frontend/server/api/*` работают в том же процессе и контейнере, что и страницы, и служат BFF между браузером и бэкендом.
 - `docs/SPEC.md` — техническое задание; `docs/FEATURES.md` — список фич и их статус; `docs/AI_USAGE.md` — как использовались ИИ-агенты.
 
 ## Запуск
