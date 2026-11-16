@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from app.graphql.context import Context
+from app.graphql.context import Context, ServiceInfo
 from app.services.catalog import CatalogService
 from app.services.creator import CreatorService
 from app.services.editor import EditorService
@@ -27,4 +27,5 @@ def context_for(
         new_alias=lambda: "alias001",
     )
     editor = EditorService(keitaro, catalog, storage, clock=lambda: NOW)
-    return Context(catalog=catalog, creator=creator, editor=editor)
+    service = ServiceInfo(campaign_name_prefix=PREFIX, tracker_url="https://tracker.test")
+    return Context(catalog=catalog, creator=creator, editor=editor, service=service)

@@ -37,6 +37,18 @@ async def test_creator_form_gets_all_reference_data_in_one_query() -> None:
     }
 
 
+async def test_interface_learns_the_prefix_and_the_tracker_address() -> None:
+    """R-UX-01, R-UX-04: the interface does not keep its own copy of these settings."""
+    result = await schema.execute(
+        "{ serviceInfo { campaignNamePrefix trackerUrl } }",
+        context_value=context_for(FakeKeitaro()),
+    )
+
+    assert result.data == {
+        "serviceInfo": {"campaignNamePrefix": "test_bulygin_", "trackerUrl": "https://tracker.test"}
+    }
+
+
 async def test_tracker_failure_is_reported_without_internals() -> None:
     """R-KT-02."""
     keitaro = FakeKeitaro(fail_on={"list_domains"})

@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from strawberry.fastapi import GraphQLRouter
 
-from app.graphql.context import Context
+from app.graphql.context import Context, ServiceInfo
 from app.graphql.schema import schema
 from app.keitaro.client import KeitaroClient, create_http_client
 from app.services.catalog import CatalogService
@@ -17,6 +17,11 @@ from app.storage.factory import open_storage
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Assemble the application; run with `uvicorn --factory app.main:create_app`."""
     config = settings or Settings()  # pyright: ignore[reportCallIssue] — values come from the environment
+
+    service = ServiceInfo(
+        campaign_name_prefix=config.campaign_name_prefix,
+        tracker_url=config.keitaro_base_url.rstrip("/"),
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
@@ -35,7 +40,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     def context(request: Request) -> Context:
         state = request.app.state
-        return Context(catalog=state.catalog, creator=state.creator, editor=state.editor)
+        return Context(
+            catalog=state.catalog, creator=state.creator, editor=state.editor, service=service
+        )
 
     app = FastAPI(
         title="Keitaro Wrapper", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None
