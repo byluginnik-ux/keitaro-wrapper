@@ -11,6 +11,7 @@ from app.services.creator import utc_now
 from app.services.errors import (
     CampaignNotFoundError,
     DraftNotPublishedError,
+    EmptyStreamError,
     KeitaroError,
     OfferAlreadyInStreamError,
     OfferNotFoundError,
@@ -181,7 +182,39 @@ class EditorService:
 
     async def push(self, stream_id: UUID) -> Stream:
         """Publish the draft: send the active offers and their shares to the tracker (R-ED-20)."""
-        raise NotImplementedError
+        stream = await self._stream(stream_id)
+        active = [link for link in stream.offers if link.state is OfferState.ACTIVE]
+        if not active:
+            raise EmptyStreamError(stream.name)
+        if not stream.dirty:
+            return stream
+        details: Details = {
+            "keitaro_id": stream.keitaro_id,
+            "before": [
+                {"offer_id": link.offer_id, "share": link.published.share}
+                for link in stream.offers
+                if link.published is not None and link.published.state is OfferState.ACTIVE
+            ],
+            "after": [{"offer_id": link.offer_id, "share": link.share} for link in active],
+        }
+        try:
+            await self._keitaro.replace_stream_offers(
+                stream.keitaro_id,
+                [tracker.StreamOffer(offer_id=link.offer_id, share=link.share) for link in active],
+            )
+        except KeitaroError as error:
+            await self._record_stream("stream.push_failed", stream, details | {"error": str(error)})
+            raise
+        published = replace(
+            stream,
+            offers=tuple(
+                replace(link, published=Published(link.share, link.state, link.pinned))
+                for link in stream.offers
+            ),
+        )
+        await self._storage.streams.save(published)
+        await self._record_stream("stream.pushed", stream, details)
+        return published
 
     async def _stream(self, stream_id: UUID) -> Stream:
         stream = await self._storage.streams.get(stream_id)
@@ -264,6 +297,19 @@ class EditorService:
     async def _offer_name(self, offer_id: int) -> str:
         offer = await self._catalog.get_offer(offer_id)
         return offer.name if offer else f"Оффер {offer_id}"
+
+    async def _record_stream(self, action: str, stream: Stream, details: Details) -> None:
+        """Write a publication to the journal with what was and what became (R-ED-24)."""
+        await self._storage.audit.record(
+            AuditEntry(
+                id=uuid4(),
+                action=action,
+                created_at=self._clock(),
+                campaign_id=stream.campaign_id,
+                stream_id=stream.id,
+                details=details,
+            )
+        )
 
     async def _record(self, action: str, campaign: Campaign, details: Details) -> None:
         await self._storage.audit.record(
