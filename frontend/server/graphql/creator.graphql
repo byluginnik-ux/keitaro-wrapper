@@ -1,0 +1,20 @@
+query CreatorOptions {
+  serviceInfo { campaignNamePrefix trackerUrl }
+  domains { id name }
+  groups { id name }
+  trafficSources { id name }
+  countries { code name }
+}
+
+query SearchOffers($search: String!, $limit: Int!) {
+  offers(search: $search, limit: $limit) { id name }
+}
+
+mutation CreateCampaign($input: CreateCampaignInput!) {
+  createCampaign(input: $input) {
+    __typename
+    ... on Campaign { ...CampaignFields }
+    ... on ValidationFailed { message fields { field message } }
+    ... on KeitaroFailure { message createdDomain { id name } }
+  }
+}

@@ -1,0 +1,73 @@
+fragment CampaignFields on Campaign {
+  id
+  keitaroId
+  name
+  alias
+  country
+}
+
+fragment StreamFields on Stream {
+  id
+  keitaroId
+  name
+  position
+  kind
+  dirty
+  offers {
+    offerId
+    name
+    share
+    pinned
+    state
+    changed
+    published { share state }
+  }
+}
+
+fragment StreamOutcome on StreamResult {
+  __typename
+  ... on Stream { ...StreamFields }
+  ... on StreamNotFound { message }
+  ... on OfferNotFound { message }
+  ... on OfferAlreadyInStream { message }
+  ... on ShareOverflow { message }
+  ... on EmptyStream { message }
+  ... on ValidationFailed { message fields { field message } }
+  ... on KeitaroFailure { message }
+}
+
+query TrackerUrl {
+  serviceInfo { trackerUrl }
+}
+
+query Campaigns {
+  serviceInfo { trackerUrl }
+  campaigns { ...CampaignFields }
+}
+
+query EditorScreen($id: ID!) {
+  serviceInfo { trackerUrl }
+  campaign(id: $id) { ...CampaignFields }
+  streams(campaignId: $id) { ...StreamFields }
+}
+
+mutation FetchStreams($keitaroId: Int!) {
+  fetchStreams(campaignKeitaroId: $keitaroId) {
+    __typename
+    ... on StreamsFetched {
+      campaign { ...CampaignFields }
+      streams { ...StreamFields }
+    }
+    ... on DraftNotPublished { message }
+    ... on CampaignNotFound { message }
+    ... on KeitaroFailure { message }
+  }
+}
+
+mutation AddOffer($input: StreamOfferInput!) { result: addOffer(input: $input) { ...StreamOutcome } }
+mutation RemoveOffer($input: StreamOfferInput!) { result: removeOffer(input: $input) { ...StreamOutcome } }
+mutation BringBackOffer($input: StreamOfferInput!) { result: bringBackOffer(input: $input) { ...StreamOutcome } }
+mutation PinShare($input: PinShareInput!) { result: pinShare(input: $input) { ...StreamOutcome } }
+mutation UnpinShare($input: StreamOfferInput!) { result: unpinShare(input: $input) { ...StreamOutcome } }
+mutation CancelDraft($streamId: ID!) { result: cancelDraft(streamId: $streamId) { ...StreamOutcome } }
+mutation PushStream($streamId: ID!) { result: pushStream(streamId: $streamId) { ...StreamOutcome } }

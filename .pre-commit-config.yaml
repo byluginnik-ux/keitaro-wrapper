@@ -8,9 +8,9 @@ repos:
       - id: check-added-large-files
         args: [--maxkb=1024]
       - id: end-of-file-fixer
-        exclude: ^(backend|frontend)/\.agents/skills/|^contracts/ts/generated\.ts$
+        exclude: ^(backend|frontend)/\.agents/skills/|^contracts/ts/generated\.ts$|^frontend/server/graphql/operations\.ts$
       - id: trailing-whitespace
-        exclude: (\.md$|^(backend|frontend)/\.agents/skills/|^contracts/ts/generated\.ts$)
+        exclude: (\.md$|^(backend|frontend)/\.agents/skills/|^contracts/ts/generated\.ts$|^frontend/server/graphql/operations\.ts$)
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.1
@@ -43,6 +43,12 @@ repos:
         entry: bash -c 'cd backend && uv run pyright'
         language: system
         files: ^backend/.*\.(py|toml)$
+        pass_filenames: false
+      - id: frontend-codegen
+        name: frontend · operation types are fresh
+        entry: bash -c 'cd frontend && corepack pnpm --silent codegen >/dev/null && git diff --exit-code --stat -- server/graphql/operations.ts'
+        language: system
+        files: ^(frontend/server/graphql/|frontend/codegen\.yml|contracts/schema\.graphql)
         pass_filenames: false
       - id: frontend-eslint
         name: frontend · eslint
