@@ -12,6 +12,7 @@ dependencies = [
 dev = [
     "anyio>=4.6",
     "httpx>=0.28",
+    "hypothesis>=6.170.15",
     "pyright>=1.1.390",
     "pytest>=8.3",
     "ruff>=0.8",
@@ -30,7 +31,7 @@ extend-exclude = [".agents"]
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
-    "D100", "D104", "D203", "D213",  # module/package docstrings are optional; pick one docstring style
+    "D100", "D104", "D107", "D203", "D213",  # module, package and __init__ docstrings are optional
     "COM812", "ISC001",              # conflict with the formatter
     "RUF001", "RUF002", "RUF003",    # Cyrillic in strings, docstrings and comments is intended
     "CPY",                           # no copyright headers

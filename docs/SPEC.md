@@ -216,7 +216,7 @@ Admin API: база `{KEITARO_BASE_URL}/admin_api/v1`, заголовок `Api-K
 | R-KT-01 … R-KT-07 | F01, F02, F07 | — |
 | R-ST-01 … R-ST-05 | F03, F04 | — |
 | R-CR-01 … R-CR-12 | F05 | — |
-| R-SH-01 … R-SH-09, S7, S8 | F06 | — |
+| R-SH-01 … R-SH-09, S7, S8 | F06 | `backend/tests/services/test_shares.py` |
 | R-ED-01 … R-ED-06, S1, S6 | F07 | — |
 | R-ED-10 … R-ED-15, S2, S4, S5 | F08 | — |
 | R-ED-20 … R-ED-24, S3 | F09 | — |
