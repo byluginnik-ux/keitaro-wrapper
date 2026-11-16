@@ -185,5 +185,13 @@ class Mutation:
     async def cancel_draft(self, info: AppInfo, stream_id: strawberry.ID) -> gql.StreamResult:
         return await stream_result(stream_id, info.context.editor.cancel)
 
+    @strawberry.mutation(
+        description=(
+            "Опубликовать черновик: отправить в Keitaro активные офферы потока с их долями"
+        )
+    )
+    async def push_stream(self, info: AppInfo, stream_id: strawberry.ID) -> gql.StreamResult:
+        return await stream_result(stream_id, info.context.editor.push)
+
 
 schema = strawberry.Schema(query=Query, mutation=Mutation, extensions=[ErrorCodes])

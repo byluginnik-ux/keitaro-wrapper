@@ -12,6 +12,7 @@ from app.services.editor import FetchedStreams
 from app.services.errors import (
     CampaignCreationError,
     DomainError,
+    EmptyStreamError,
     KeitaroError,
     OfferAlreadyInStreamError,
     OfferNotFoundError,
@@ -130,26 +131,28 @@ type StreamRefusal = (
     | gql.OfferNotFound
     | gql.OfferAlreadyInStream
     | gql.ShareOverflow
+    | gql.EmptyStream
     | gql.ValidationFailed
     | gql.KeitaroFailure
 )
 
 
+MESSAGE_ONLY = {
+    StreamNotFoundError: gql.StreamNotFound,
+    OfferNotFoundError: gql.OfferNotFound,
+    OfferAlreadyInStreamError: gql.OfferAlreadyInStream,
+    ShareOverflowError: gql.ShareOverflow,
+    EmptyStreamError: gql.EmptyStream,
+}
+
+
 def to_stream_refusal(error: DomainError) -> StreamRefusal:
     """Turn a refusal of the editor into its member of StreamResult; anything else is a bug."""
-    message = str(error)
-    match error:
-        case StreamNotFoundError():
-            return gql.StreamNotFound(message=message)
-        case OfferNotFoundError():
-            return gql.OfferNotFound(message=message)
-        case OfferAlreadyInStreamError():
-            return gql.OfferAlreadyInStream(message=message)
-        case ShareOverflowError():
-            return gql.ShareOverflow(message=message)
-        case ValidationError():
-            return to_validation_failed(error)
-        case KeitaroError():
-            return to_keitaro_failure(error)
-        case _:
-            raise error
+    if isinstance(error, ValidationError):
+        return to_validation_failed(error)
+    if isinstance(error, KeitaroError):
+        return to_keitaro_failure(error)
+    for kind, answer in MESSAGE_ONLY.items():
+        if isinstance(error, kind):
+            return answer(message=str(error))
+    raise error
