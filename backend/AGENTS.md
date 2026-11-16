@@ -9,7 +9,7 @@ uv sync                              # зависимости
 uv run pytest -x -q                  # тесты
 uv run ruff check . && uv run ruff format --check .
 uv run pyright
-uv run uvicorn app.main:app --reload # запуск, http://127.0.0.1:8000/health
+uv run uvicorn --factory app.main:create_app --reload   # http://127.0.0.1:8000/health, GraphiQL при DEBUG=1
 ```
 
 Перед коммитом все четыре проверки зелёные.

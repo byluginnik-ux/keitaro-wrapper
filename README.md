@@ -39,7 +39,7 @@ docker compose run --rm backend alembic downgrade -1      # откатить п�
 | | backend | frontend |
 |---|---------|----------|
 | Зависимости | `uv sync` | `corepack pnpm install` |
-| Запуск | `uv run uvicorn app.main:app --reload` | `corepack pnpm dev` |
+| Запуск | `uv run uvicorn --factory app.main:create_app --reload` | `corepack pnpm dev` |
 | Тесты | `uv run pytest -q` | `corepack pnpm test` |
 | Линтеры | `uv run ruff check . && uv run ruff format --check .` | `corepack pnpm lint` |
 | Типы | `uv run pyright` | `corepack pnpm typecheck` |
