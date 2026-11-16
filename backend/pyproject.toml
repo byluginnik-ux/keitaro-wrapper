@@ -50,6 +50,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "D", "PLR2004"]
+"alembic/**" = ["D103", "INP001"]            # migration scripts are loaded by Alembic, not imported
 "app/graphql/mappers.py" = ["D103"]      # one-line translations, the names say it all
 
 [tool.pyright]
