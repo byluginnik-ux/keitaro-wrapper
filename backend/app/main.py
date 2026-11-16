@@ -8,6 +8,7 @@ from app.graphql.context import Context
 from app.graphql.schema import schema
 from app.keitaro.client import KeitaroClient, create_http_client
 from app.services.catalog import CatalogService
+from app.services.creator import CreatorService
 from app.settings import Settings
 from app.storage.factory import open_storage
 
@@ -22,12 +23,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             create_http_client(config.keitaro_base_url, config.keitaro_api_key) as http,
             open_storage(config) as storage,
         ):
-            app.state.catalog = CatalogService(KeitaroClient(http))
-            app.state.storage = storage
+            keitaro = KeitaroClient(http)
+            catalog = CatalogService(keitaro)
+            app.state.catalog = catalog
+            app.state.creator = CreatorService(
+                keitaro, catalog, storage, name_prefix=config.campaign_name_prefix
+            )
             yield
 
     def context(request: Request) -> Context:
-        return Context(catalog=request.app.state.catalog)
+        return Context(catalog=request.app.state.catalog, creator=request.app.state.creator)
 
     app = FastAPI(
         title="Keitaro Wrapper", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None

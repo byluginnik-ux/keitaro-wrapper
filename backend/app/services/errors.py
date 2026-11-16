@@ -1,3 +1,6 @@
+from app.keitaro.models import Domain
+
+
 class DomainError(Exception):
     """A rule of the domain was violated; `code` is stable and safe to show to clients."""
 
@@ -26,3 +29,23 @@ class KeitaroError(DomainError):
     def __init__(self, message: str, status: int | None = None) -> None:
         super().__init__(message)
         self.status = status
+
+
+class ValidationError(DomainError):
+    """The input breaks the rules; `fields` maps an input field to the remark about it."""
+
+    code = "validation_failed"
+
+    def __init__(self, fields: dict[str, str]) -> None:
+        super().__init__("Проверьте поля: " + ", ".join(fields))
+        self.fields = fields
+
+
+class CampaignCreationError(KeitaroError):
+    """The tracker failed while a campaign was being assembled (R-CR-07, R-CR-12)."""
+
+    def __init__(
+        self, message: str, status: int | None = None, created_domain: Domain | None = None
+    ) -> None:
+        super().__init__(message, status)
+        self.created_domain = created_domain

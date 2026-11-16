@@ -41,6 +41,7 @@ class FakeKeitaro:
     offers: list[Offer] = field(default_factory=sample_offers)
     campaigns: dict[int, Campaign] = field(default_factory=dict[int, Campaign])
     streams: dict[int, Stream] = field(default_factory=dict[int, Stream])
+    stream_requests: list[NewStream] = field(default_factory=list[NewStream])
     calls: Counter[str] = field(default_factory=Counter[str])
     fail_on: set[str] = field(default_factory=set[str])
     _next_id: int = 1000
@@ -92,6 +93,7 @@ class FakeKeitaro:
 
     async def create_stream(self, stream: NewStream) -> Stream:
         self._enter("create_stream")
+        self.stream_requests.append(stream)
         created = Stream(
             id=self._new_id(),
             campaign_id=stream.campaign_id,

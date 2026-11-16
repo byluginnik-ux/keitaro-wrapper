@@ -1,9 +1,8 @@
 import pytest
 
-from app.graphql.context import Context
 from app.graphql.schema import schema
-from app.services.catalog import CatalogService
 from tests.fakes import FakeKeitaro
+from tests.graphql.support import context_for
 
 pytestmark = pytest.mark.anyio
 
@@ -20,7 +19,7 @@ query CreatorOptions($offerSearch: String!, $countrySearch: String!) {
 
 async def test_creator_form_gets_all_reference_data_in_one_query() -> None:
     """R-UX-02, R-ARCH-03."""
-    context = Context(catalog=CatalogService(FakeKeitaro()))
+    context = context_for(FakeKeitaro())
 
     result = await schema.execute(
         CREATOR_OPTIONS,
@@ -41,7 +40,7 @@ async def test_creator_form_gets_all_reference_data_in_one_query() -> None:
 async def test_tracker_failure_is_reported_without_internals() -> None:
     """R-KT-02."""
     keitaro = FakeKeitaro(fail_on={"list_domains"})
-    context = Context(catalog=CatalogService(keitaro))
+    context = context_for(keitaro)
 
     result = await schema.execute("{ domains { id } }", context_value=context)
 
