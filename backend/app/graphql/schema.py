@@ -201,4 +201,11 @@ class Mutation:
         return await stream_result(stream_id, info.context.editor.push)
 
 
-schema = strawberry.Schema(query=Query, mutation=Mutation, extensions=[ErrorCodes])
+def build_schema(*, debug: bool) -> strawberry.Schema:
+    """Build the schema the service answers with."""
+    del debug
+    return strawberry.Schema(query=Query, mutation=Mutation, extensions=[ErrorCodes])
+
+
+# the full schema, for comparing with the contract
+schema = build_schema(debug=True)
