@@ -1,3 +1,6 @@
+from collections.abc import Awaitable, Callable
+from uuid import UUID
+
 import strawberry
 from keitaro_contracts import types as gql
 from strawberry.types import Info
@@ -5,15 +8,29 @@ from strawberry.types import Info
 from app.graphql import mappers
 from app.graphql.context import Context
 from app.graphql.errors import ErrorCodes
+from app.services import models
 from app.services.countries import search_countries
 from app.services.errors import (
     CampaignNotFoundError,
+    DomainError,
     DraftNotPublishedError,
     KeitaroError,
     ValidationError,
 )
 
 type AppInfo = Info[Context, None]
+
+UNKNOWN_STREAM = UUID(int=0)  # an ID that is not ours matches no stream
+
+
+async def stream_result(
+    stream_id: strawberry.ID, action: Callable[[UUID], Awaitable[models.Stream]]
+) -> gql.StreamResult:
+    """Run one action of the editor and answer with the stream or the typed refusal."""
+    try:
+        return mappers.to_stream(await action(mappers.to_uuid(stream_id) or UNKNOWN_STREAM))
+    except DomainError as error:
+        return mappers.to_stream_refusal(error)
 
 
 @strawberry.type
@@ -98,6 +115,75 @@ class Mutation:
         except KeitaroError as error:
             return mappers.to_keitaro_failure(error)
         return mappers.to_streams_fetched(fetched)
+
+    @strawberry.mutation(
+        description="Добавить оффер в черновик потока; убранный оффер возвращается"
+    )
+    async def add_offer(
+        self,
+        info: AppInfo,
+        input: gql.StreamOfferInput,  # noqa: A002 — the argument name is fixed by the contract
+    ) -> gql.StreamResult:
+        editor = info.context.editor
+        return await stream_result(
+            input.stream_id, lambda id_: editor.add_offer(id_, input.offer_id)
+        )
+
+    @strawberry.mutation(
+        description=(
+            "Убрать оффер из черновика: он остаётся в потоке со статусом REMOVED и долей 0"
+        )
+    )
+    async def remove_offer(
+        self,
+        info: AppInfo,
+        input: gql.StreamOfferInput,  # noqa: A002 — the argument name is fixed by the contract
+    ) -> gql.StreamResult:
+        editor = info.context.editor
+        return await stream_result(
+            input.stream_id, lambda id_: editor.remove_offer(id_, input.offer_id)
+        )
+
+    @strawberry.mutation(description="Вернуть убранный оффер")
+    async def bring_back_offer(
+        self,
+        info: AppInfo,
+        input: gql.StreamOfferInput,  # noqa: A002 — the argument name is fixed by the contract
+    ) -> gql.StreamResult:
+        editor = info.context.editor
+        return await stream_result(
+            input.stream_id, lambda id_: editor.bring_back(id_, input.offer_id)
+        )
+
+    @strawberry.mutation(
+        description="Задать долю оффера и закрепить её; остальные доли пересчитываются"
+    )
+    async def pin_share(
+        self,
+        info: AppInfo,
+        input: gql.PinShareInput,  # noqa: A002 — the argument name is fixed by the contract
+    ) -> gql.StreamResult:
+        editor = info.context.editor
+        return await stream_result(
+            input.stream_id, lambda id_: editor.pin_share(id_, input.offer_id, input.share)
+        )
+
+    @strawberry.mutation(description="Снять закрепление; оффер снова участвует в пересчёте")
+    async def unpin_share(
+        self,
+        info: AppInfo,
+        input: gql.StreamOfferInput,  # noqa: A002 — the argument name is fixed by the contract
+    ) -> gql.StreamResult:
+        editor = info.context.editor
+        return await stream_result(
+            input.stream_id, lambda id_: editor.unpin_share(id_, input.offer_id)
+        )
+
+    @strawberry.mutation(
+        description="Отменить черновик: поток возвращается к опубликованному снимку"
+    )
+    async def cancel_draft(self, info: AppInfo, stream_id: strawberry.ID) -> gql.StreamResult:
+        return await stream_result(stream_id, info.context.editor.cancel)
 
 
 schema = strawberry.Schema(query=Query, mutation=Mutation, extensions=[ErrorCodes])

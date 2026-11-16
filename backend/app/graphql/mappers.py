@@ -9,7 +9,16 @@ from app.keitaro import models as keitaro
 from app.services import countries, models
 from app.services.creator import NewCampaignRequest
 from app.services.editor import FetchedStreams
-from app.services.errors import CampaignCreationError, KeitaroError, ValidationError
+from app.services.errors import (
+    CampaignCreationError,
+    DomainError,
+    KeitaroError,
+    OfferAlreadyInStreamError,
+    OfferNotFoundError,
+    ShareOverflowError,
+    StreamNotFoundError,
+    ValidationError,
+)
 from app.services.shares import OfferState
 
 
@@ -114,3 +123,33 @@ def to_uuid(value: strawberry.ID) -> UUID | None:
         return UUID(str(value))
     except ValueError:
         return None
+
+
+type StreamRefusal = (
+    gql.StreamNotFound
+    | gql.OfferNotFound
+    | gql.OfferAlreadyInStream
+    | gql.ShareOverflow
+    | gql.ValidationFailed
+    | gql.KeitaroFailure
+)
+
+
+def to_stream_refusal(error: DomainError) -> StreamRefusal:
+    """Turn a refusal of the editor into its member of StreamResult; anything else is a bug."""
+    message = str(error)
+    match error:
+        case StreamNotFoundError():
+            return gql.StreamNotFound(message=message)
+        case OfferNotFoundError():
+            return gql.OfferNotFound(message=message)
+        case OfferAlreadyInStreamError():
+            return gql.OfferAlreadyInStream(message=message)
+        case ShareOverflowError():
+            return gql.ShareOverflow(message=message)
+        case ValidationError():
+            return to_validation_failed(error)
+        case KeitaroError():
+            return to_keitaro_failure(error)
+        case _:
+            raise error
