@@ -6,7 +6,12 @@ from app.graphql import mappers
 from app.graphql.context import Context
 from app.graphql.errors import ErrorCodes
 from app.services.countries import search_countries
-from app.services.errors import KeitaroError, ValidationError
+from app.services.errors import (
+    CampaignNotFoundError,
+    DraftNotPublishedError,
+    KeitaroError,
+    ValidationError,
+)
 
 type AppInfo = Info[Context, None]
 
@@ -37,6 +42,24 @@ class Query:
     def countries(self, search: str = "") -> list[gql.Country]:
         return [mappers.to_country(item) for item in search_countries(search)]
 
+    @strawberry.field(description="Кампании, известные сервису, сначала новые")
+    async def campaigns(self, info: AppInfo) -> list[gql.Campaign]:
+        return [mappers.to_campaign(item) for item in await info.context.editor.campaigns()]
+
+    @strawberry.field(description="Кампания по нашему идентификатору; null — такой нет")
+    async def campaign(self, info: AppInfo, id: strawberry.ID) -> gql.Campaign | None:  # noqa: A002 — the argument name is fixed by the contract
+        campaign_id = mappers.to_uuid(id)
+        found = await info.context.editor.campaign(campaign_id) if campaign_id else None
+        return mappers.to_campaign(found) if found else None
+
+    @strawberry.field(
+        description="Потоки кампании в том виде, в каком они сохранены у нас, по порядку"
+    )
+    async def streams(self, info: AppInfo, campaign_id: strawberry.ID) -> list[gql.Stream]:
+        owner = mappers.to_uuid(campaign_id)
+        found = await info.context.editor.streams(owner) if owner else []
+        return [mappers.to_stream(item) for item in found]
+
 
 @strawberry.type
 class Mutation:
@@ -57,6 +80,24 @@ class Mutation:
         except KeitaroError as error:
             return mappers.to_keitaro_failure(error)
         return mappers.to_campaign(campaign)
+
+    @strawberry.mutation(
+        description=(
+            "Загрузить потоки кампании из Keitaro по её ID в трекере и сверить с сохранёнными"
+        )
+    )
+    async def fetch_streams(
+        self, info: AppInfo, campaign_keitaro_id: int
+    ) -> gql.FetchStreamsResult:
+        try:
+            fetched = await info.context.editor.fetch(campaign_keitaro_id)
+        except DraftNotPublishedError as error:
+            return gql.DraftNotPublished(message=str(error))
+        except CampaignNotFoundError as error:
+            return gql.CampaignNotFound(message=str(error))
+        except KeitaroError as error:
+            return mappers.to_keitaro_failure(error)
+        return mappers.to_streams_fetched(fetched)
 
 
 schema = strawberry.Schema(query=Query, mutation=Mutation, extensions=[ErrorCodes])

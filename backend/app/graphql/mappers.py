@@ -1,12 +1,16 @@
 """Translate what services return into the types of the contract."""
 
+from uuid import UUID
+
 import strawberry
 from keitaro_contracts import types as gql
 
 from app.keitaro import models as keitaro
 from app.services import countries, models
 from app.services.creator import NewCampaignRequest
+from app.services.editor import FetchedStreams
 from app.services.errors import CampaignCreationError, KeitaroError, ValidationError
+from app.services.shares import OfferState
 
 
 def to_domain(domain: keitaro.Domain) -> gql.Domain:
@@ -61,3 +65,52 @@ def to_keitaro_failure(error: KeitaroError) -> gql.KeitaroFailure:
     return gql.KeitaroFailure(
         message=str(error), created_domain=to_domain(created) if created else None
     )
+
+
+def to_offer_state(state: OfferState) -> gql.OfferState:
+    return gql.OfferState[state.name]
+
+
+def to_stream_offer(link: models.OfferLink) -> gql.StreamOffer:
+    published = link.published
+    return gql.StreamOffer(
+        offer_id=link.offer_id,
+        name=link.name,
+        share=link.share,
+        pinned=link.pinned,
+        state=to_offer_state(link.state),
+        published=gql.PublishedOffer(
+            share=published.share, state=to_offer_state(published.state), pinned=published.pinned
+        )
+        if published
+        else None,
+        changed=link.changed,
+    )
+
+
+def to_stream(stream: models.Stream) -> gql.Stream:
+    return gql.Stream(
+        id=strawberry.ID(str(stream.id)),
+        keitaro_id=stream.keitaro_id,
+        campaign_id=strawberry.ID(str(stream.campaign_id)),
+        name=stream.name,
+        position=stream.position,
+        kind=stream.kind,
+        dirty=stream.dirty,
+        offers=[to_stream_offer(link) for link in stream.offers],
+    )
+
+
+def to_streams_fetched(fetched: FetchedStreams) -> gql.StreamsFetched:
+    return gql.StreamsFetched(
+        campaign=to_campaign(fetched.campaign),
+        streams=[to_stream(stream) for stream in fetched.streams],
+    )
+
+
+def to_uuid(value: strawberry.ID) -> UUID | None:
+    """Read our identifier; anything else simply matches nothing."""
+    try:
+        return UUID(str(value))
+    except ValueError:
+        return None
