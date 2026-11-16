@@ -37,7 +37,15 @@ offers:  [{ offer_id, share, state: active | disabled }]     # share — цел�
 - Поток с офферами: `schema: landings`, список в `offers`.
 - В ответе у оффера потока есть собственный `id` привязки — он не равен `offer_id`.
 
-Точные значения `action_type` и имя фильтра страны брать из эталонных ответов `backend/tests/fixtures/keitaro/` (сняты с живого трекера), а не из памяти.
+Проверено на живом трекере (эталоны — `backend/tests/fixtures/keitaro/`):
+
+- редирект на URL: `type: regular`, `schema: redirect`, `action_type: http`, `action_payload: "<url>"`;
+- фильтр страны: `{ name: "country", mode: "accept", payload: ["AU"] }` — коды ISO alpha-2 в верхнем регистре;
+- поток с офферами: `type: regular`, `schema: landings`, `action_type: http`, `action_payload: ""`;
+- порядок потоков задаёт `position` (1, 2, …);
+- сумму долей Keitaro не проверяет;
+- 404 на несуществующую сущность — страница HTML от nginx, не JSON;
+- `GET /offers` отдаёт весь список без поиска и постраничности (сотни записей, ~160 КБ).
 
 ## Правила клиента
 
