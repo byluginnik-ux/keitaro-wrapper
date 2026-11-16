@@ -42,6 +42,7 @@ def returning(kind: object, name: str) -> StrawberryField:
     def resolver() -> None:
         raise NotImplementedError
 
+    resolver.__name__ = f"probe_{name}"  # fields of one type are told apart by this name
     resolver.__annotations__["return"] = kind
     field = strawberry.field(resolver=resolver, name=f"probe{name}")
     return cast("StrawberryField", field)  # the overload reports the resolver's own return type

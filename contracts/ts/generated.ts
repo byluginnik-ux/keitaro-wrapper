@@ -24,6 +24,12 @@ export type Campaign = {
   name: Scalars['String']['output'];
 };
 
+/** В Keitaro нет кампании с таким ID */
+export type CampaignNotFound = {
+  __typename?: 'CampaignNotFound';
+  message: Scalars['String']['output'];
+};
+
 /** Страна ISO 3166-1 */
 export type Country = {
   __typename?: 'Country';
@@ -57,6 +63,14 @@ export type Domain = {
   name: Scalars['String']['output'];
 };
 
+/** В кампании есть неопубликованный черновик: его нужно опубликовать или отменить */
+export type DraftNotPublished = {
+  __typename?: 'DraftNotPublished';
+  message: Scalars['String']['output'];
+};
+
+export type FetchStreamsResult = CampaignNotFound | DraftNotPublished | KeitaroFailure | StreamsFetched;
+
 /** Замечание к одному полю ввода */
 export type FieldError = {
   __typename?: 'FieldError';
@@ -84,11 +98,18 @@ export type Mutation = {
   __typename?: 'Mutation';
   /** Создать кампанию: поток 1 уводит страну на Google, поток 2 ведёт на оффер */
   createCampaign: CreateCampaignResult;
+  /** Загрузить потоки кампании из Keitaro по её ID в трекере и сверить с сохранёнными */
+  fetchStreams: FetchStreamsResult;
 };
 
 
 export type MutationCreateCampaignArgs = {
   input: CreateCampaignInput;
+};
+
+
+export type MutationFetchStreamsArgs = {
+  campaignKeitaroId: Scalars['Int']['input'];
 };
 
 /** Оффер, заведённый в Keitaro */
@@ -98,8 +119,24 @@ export type Offer = {
   name: Scalars['String']['output'];
 };
 
+export type OfferState =
+  | 'ACTIVE'
+  | 'REMOVED';
+
+/** Что было в Keitaro для оффера при последней загрузке или публикации */
+export type PublishedOffer = {
+  __typename?: 'PublishedOffer';
+  pinned: Scalars['Boolean']['output'];
+  share: Scalars['Int']['output'];
+  state: OfferState;
+};
+
 export type Query = {
   __typename?: 'Query';
+  /** Кампания по нашему идентификатору; null — такой нет */
+  campaign?: Maybe<Campaign>;
+  /** Кампании, известные сервису, сначала новые */
+  campaigns: Array<Campaign>;
   /** Страны: поиск по названию или началу кода */
   countries: Array<Country>;
   /** Домены трекера, на которых можно разместить кампанию */
@@ -108,8 +145,15 @@ export type Query = {
   groups: Array<Group>;
   /** Активные офферы: поиск по фрагменту названия или началу ID */
   offers: Array<Offer>;
+  /** Потоки кампании в том виде, в каком они сохранены у нас, по порядку */
+  streams: Array<Stream>;
   /** Источники трафика */
   trafficSources: Array<TrafficSource>;
+};
+
+
+export type QueryCampaignArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -121,6 +165,53 @@ export type QueryCountriesArgs = {
 export type QueryOffersArgs = {
   limit?: Scalars['Int']['input'];
   search?: Scalars['String']['input'];
+};
+
+
+export type QueryStreamsArgs = {
+  campaignId: Scalars['ID']['input'];
+};
+
+/** Поток кампании */
+export type Stream = {
+  __typename?: 'Stream';
+  campaignId: Scalars['ID']['output'];
+  /** Есть неопубликованные изменения */
+  dirty: Scalars['Boolean']['output'];
+  /** Наш идентификатор */
+  id: Scalars['ID']['output'];
+  /** Идентификатор потока в Keitaro */
+  keitaroId: Scalars['Int']['output'];
+  /** Схема потока в Keitaro: landings — офферы, redirect — перенаправление */
+  kind: Scalars['String']['output'];
+  name: Scalars['String']['output'];
+  /** Офферы в порядке добавления; у потока-перенаправления список пуст */
+  offers: Array<StreamOffer>;
+  /** Порядковый номер в кампании */
+  position: Scalars['Int']['output'];
+};
+
+/** Оффер в потоке: черновик и опубликованный снимок */
+export type StreamOffer = {
+  __typename?: 'StreamOffer';
+  /** Публикация изменит этот оффер в Keitaro */
+  changed: Scalars['Boolean']['output'];
+  name: Scalars['String']['output'];
+  offerId: Scalars['Int']['output'];
+  /** Доля закреплена и не меняется при пересчёте */
+  pinned: Scalars['Boolean']['output'];
+  /** Опубликованный снимок; null — оффер ещё не публиковался */
+  published?: Maybe<PublishedOffer>;
+  /** Доля в процентах; у убранного оффера 0 */
+  share: Scalars['Int']['output'];
+  state: OfferState;
+};
+
+/** Потоки загружены из Keitaro и сохранены */
+export type StreamsFetched = {
+  __typename?: 'StreamsFetched';
+  campaign: Campaign;
+  streams: Array<Stream>;
 };
 
 /** Источник трафика */

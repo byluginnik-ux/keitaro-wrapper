@@ -2,6 +2,12 @@
 
 Версия одна для npm-пакета и пакета Python. Удаление или переименование — мажорная, добавление — минорная.
 
+## 0.3.0
+
+- Типы редактора: `Stream`, `StreamOffer`, `PublishedOffer`, enum `OfferState`.
+- Запросы `campaigns`, `campaign(id)`, `streams(campaignId)`.
+- Мутация `fetchStreams(campaignKeitaroId)` с результатом `FetchStreamsResult = StreamsFetched | DraftNotPublished | CampaignNotFound | KeitaroFailure`.
+
 ## 0.2.0
 
 - Мутация `createCampaign(input)` с результатом `CreateCampaignResult = Campaign | ValidationFailed | KeitaroFailure`.
