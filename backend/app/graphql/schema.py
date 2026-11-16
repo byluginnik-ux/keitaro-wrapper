@@ -37,6 +37,13 @@ async def stream_result(
 class Query:
     """Resolvers of the contract's Query; signatures and descriptions repeat schema.graphql."""
 
+    @strawberry.field(description="Настройки сервиса, которые нужны интерфейсу")
+    def service_info(self, info: AppInfo) -> gql.ServiceInfo:
+        service = info.context.service
+        return gql.ServiceInfo(
+            campaign_name_prefix=service.campaign_name_prefix, tracker_url=service.tracker_url
+        )
+
     @strawberry.field(description="Домены трекера, на которых можно разместить кампанию")
     async def domains(self, info: AppInfo) -> list[gql.Domain]:
         return [mappers.to_domain(item) for item in await info.context.catalog.domains()]
