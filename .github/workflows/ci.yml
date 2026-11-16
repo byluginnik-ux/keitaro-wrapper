@@ -36,6 +36,21 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: keitaro
+          POSTGRES_PASSWORD: keitaro
+          POSTGRES_DB: keitaro_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U keitaro" --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      # every storage adapter must be proven here; a skipped adapter fails the job
+      REQUIRE_STORAGE_TESTS: "1"
+      TEST_DATABASE_URL: postgresql+asyncpg://keitaro:keitaro@localhost:5432/keitaro_test
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7

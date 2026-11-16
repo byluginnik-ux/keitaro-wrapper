@@ -7,11 +7,42 @@ services:
     env_file:
       - path: .env
         required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://keitaro:keitaro@db:5432/keitaro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # Применяет миграции Alembic перед стартом бэкенда и завершается.
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["/srv/backend/.venv/bin/alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://keitaro:keitaro@db:5432/keitaro
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: keitaro
+      POSTGRES_PASSWORD: keitaro
+      POSTGRES_DB: keitaro
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "keitaro"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
 
   frontend:
     build:
@@ -24,3 +55,19 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+
+  # Базы для контрактных тестов хранилища: docker compose --profile test up -d
+  db-test:
+    image: postgres:17-alpine
+    profiles: [test]
+    environment:
+      POSTGRES_USER: keitaro
+      POSTGRES_PASSWORD: keitaro
+      POSTGRES_DB: keitaro_test
+    ports:
+      - "127.0.0.1:${TEST_POSTGRES_PORT:-55432}:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+
+volumes:
+  db-data:

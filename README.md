@@ -25,11 +25,23 @@ docker compose up --build
 
 ## Миграции
 
-Схема базы меняется только миграциями Alembic. Появятся вместе с хранилищем (фича F03); команды:
+Схема базы меняется только миграциями Alembic (`backend/alembic/versions/`). При `docker compose up` их применяет сервис `migrate` до старта бэкенда. Вручную:
 
 ```
-docker compose run --rm backend alembic upgrade head      # применить
-docker compose run --rm backend alembic downgrade -1      # откатить последнюю
+docker compose run --rm migrate                               # применить все (alembic upgrade head)
+docker compose run --rm migrate alembic downgrade -1          # откатить последнюю
+docker compose run --rm migrate alembic current               # текущая версия схемы
+```
+
+Новая миграция после изменения моделей в `backend/app/storage/sqlalchemy/tables.py`:
+
+```
+docker compose --profile test up -d db-test
+cd backend
+export DATABASE_URL=postgresql+asyncpg://keitaro:keitaro@127.0.0.1:55432/keitaro_test
+uv run alembic upgrade head
+uv run alembic revision --autogenerate -m "что изменилось"    # прочитать и поправить файл
+uv run alembic check                                          # модели и миграции совпадают
 ```
 
 ## Разработка
@@ -43,6 +55,13 @@ docker compose run --rm backend alembic downgrade -1      # откатить п�
 | Тесты | `uv run pytest -q` | `corepack pnpm test` |
 | Линтеры | `uv run ruff check . && uv run ruff format --check .` | `corepack pnpm lint` |
 | Типы | `uv run pyright` | `corepack pnpm typecheck` |
+
+Тесты хранилища на настоящей базе (без неё они пропускаются с причиной, в CI пропуск запрещён):
+
+```
+docker compose --profile test up -d db-test
+TEST_DATABASE_URL=postgresql+asyncpg://keitaro:keitaro@127.0.0.1:55432/keitaro_test uv run pytest -q
+```
 
 Хуки перед коммитом (линтеры, поиск секретов, формат сообщения):
 
