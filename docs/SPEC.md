@@ -212,6 +212,7 @@ Admin API: база `{KEITARO_BASE_URL}/admin_api/v1`, заголовок `Api-K
 - **R-Q-04.** Секреты не попадают в репозиторий; проверка `gitleaks` в pre-commit и CI.
 - **R-Q-05.** README содержит запуск одной командой и инструкцию по миграциям.
 - **R-Q-06.** История git линейная, сообщения в формате Conventional Commits.
+- **R-Q-07.** API бэкенда не раскрывает лишнего: интроспекция схемы и GraphiQL доступны только при `DEBUG`; запрос ограничен по числу псевдонимов (15) и лексем (1000) — глубину ограничивать нечем, в схеме нет циклов; ключ Keitaro не выводится при печати настроек.
 
 ## 11. Матрица «требование → тест»
 
@@ -236,6 +237,7 @@ Admin API: база `{KEITARO_BASE_URL}/admin_api/v1`, заголовок `Api-K
 | R-UX-10 … R-UX-16 | F11 | `frontend/tests/app/editor.test.ts`; сценарии S1–S8 и работа с клавиатуры — `frontend/tests/e2e/editor.spec.ts` |
 | R-Q-02, R-Q-04, R-Q-06 | F00 | `.pre-commit-config.yaml`, `.github/workflows/ci.yml`, `backend/tests/test_health.py`, `frontend/tests/server/health.test.ts` |
 | R-Q-01, R-Q-03, R-Q-05 | F12 | — |
+| R-Q-07 | F12 | — |
 
 ## 12. Допущения
 
