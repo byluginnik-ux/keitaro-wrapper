@@ -55,6 +55,7 @@ Admin API: база `{KEITARO_BASE_URL}/admin_api/v1`, заголовок `Api-K
 |----------|--------|
 | Создать кампанию | `POST /campaigns` |
 | Создать домен | `POST /domains` (обязательно `name`) |
+| Прочитать кампанию | `GET /campaigns/{id}` |
 | Удалить кампанию | `DELETE /campaigns/{id}` |
 | Создать поток | `POST /streams` |
 | Потоки кампании | `GET /campaigns/{id}/streams` |
@@ -108,6 +109,8 @@ Admin API: база `{KEITARO_BASE_URL}/admin_api/v1`, заголовок `Api-K
 - **R-ED-04.** Оффер, известный нам, но отсутствующий в Keitaro при повторной загрузке, не удаляется, а получает статус `removed` и долю 0.
 - **R-ED-05.** Закрепления при повторной загрузке сохраняются, если доля в Keitaro равна закреплённой; иначе закрепление снимается.
 - **R-ED-06.** Загрузка при наличии черновика в любом потоке кампании отклоняется (`DraftNotPublished`), пока черновик не опубликован или не отменён.
+- **R-ED-07.** Кампания задаётся её ID в Keitaro. Если в нашей базе её нет, она читается из Keitaro и сохраняется; так в редактор попадает кампания, созданная не через создаватор. Неизвестный ID — отказ `CampaignNotFound`.
+- **R-ED-08.** Поток, которого при повторной загрузке в Keitaro уже нет, удаляется и из нашей базы.
 
 ### 7.3 Черновик
 
@@ -223,7 +226,7 @@ Admin API: база `{KEITARO_BASE_URL}/admin_api/v1`, заголовок `Api-K
 | R-ST-01 … R-ST-05 | F03, F04 | `backend/tests/storage/test_contract.py` (один набор для всех адаптеров) |
 | R-CR-01 … R-CR-12 | F05 | `backend/tests/services/test_creator.py`, `backend/tests/graphql/test_create_campaign.py` |
 | R-SH-01 … R-SH-09, S7, S8 | F06 | `backend/tests/services/test_shares.py` |
-| R-ED-01 … R-ED-06, S1, S6 | F07 | — |
+| R-ED-01 … R-ED-08, S1, S6 | F07 | — |
 | R-ED-10 … R-ED-15, S2, S4, S5 | F08 | — |
 | R-ED-20 … R-ED-24, S3 | F09 | — |
 | R-UX-20 … R-UX-24 | F10a | — |
