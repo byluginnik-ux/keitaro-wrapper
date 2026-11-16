@@ -1,0 +1,15 @@
+.git
+.env
+**/.venv
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/.hypothesis
+**/.nuxt
+**/.output
+**/dist
+**/.agents
+**/.claude
+**/tests
+docs

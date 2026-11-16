@@ -1,7 +1,9 @@
 # Наружу открыт только фронт. Бэкенд доступен BFF по внутренней сети (R-ARCH-04).
 services:
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     env_file:
       - path: .env
         required: false
@@ -12,7 +14,9 @@ services:
       retries: 10
 
   frontend:
-    build: ./frontend
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
     environment:
       NUXT_BACKEND_GRAPHQL_URL: http://backend:8000/graphql
     ports:

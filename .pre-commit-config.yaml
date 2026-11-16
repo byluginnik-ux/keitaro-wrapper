@@ -8,9 +8,9 @@ repos:
       - id: check-added-large-files
         args: [--maxkb=1024]
       - id: end-of-file-fixer
-        exclude: ^(backend|frontend)/\.agents/skills/
+        exclude: ^(backend|frontend)/\.agents/skills/|^contracts/ts/generated\.ts$
       - id: trailing-whitespace
-        exclude: (\.md$|^(backend|frontend)/\.agents/skills/)
+        exclude: (\.md$|^(backend|frontend)/\.agents/skills/|^contracts/ts/generated\.ts$)
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.1
@@ -25,6 +25,13 @@ repos:
 
   - repo: local
     hooks:
+      - id: contracts-check
+        name: contracts · generated files, lint, tests
+        entry: contracts/scripts/check.sh
+        language: system
+        files: ^contracts/
+        exclude: ^contracts/\.agents/
+        pass_filenames: false
       - id: backend-ruff
         name: backend · ruff check
         entry: bash -c 'cd backend && uv run ruff check . && uv run ruff format --check .'
