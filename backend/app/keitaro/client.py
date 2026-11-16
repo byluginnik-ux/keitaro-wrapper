@@ -58,7 +58,7 @@ class KeitaroClient:
         return _parse(list[Offer], await self._read("/offers"))
 
     async def get_campaign(self, campaign_id: int) -> Campaign:
-        raise NotImplementedError
+        return _parse(Campaign, await self._read(f"/campaigns/{campaign_id}"))
 
     async def create_campaign(self, campaign: NewCampaign) -> Campaign:
         return _parse(Campaign, await self._write("POST", "/campaigns", campaign.model_dump()))
