@@ -1,0 +1,50 @@
+# Контракт Keitaro Wrapper. Единственное место правки типов:
+# после изменения — scripts/generate.sh, версия в VERSION и запись в CHANGELOG.md.
+
+"""Домен трекера, на котором размещается кампания"""
+type Domain {
+  id: Int!
+  name: String!
+}
+
+"""Группа кампаний"""
+type Group {
+  id: Int!
+  name: String!
+}
+
+"""Источник трафика"""
+type TrafficSource {
+  id: Int!
+  name: String!
+}
+
+"""Оффер, заведённый в Keitaro"""
+type Offer {
+  id: Int!
+  name: String!
+}
+
+"""Страна ISO 3166-1"""
+type Country {
+  """Код alpha-2 в верхнем регистре"""
+  code: String!
+  name: String!
+}
+
+type Query {
+  """Домены трекера, на которых можно разместить кампанию"""
+  domains: [Domain!]!
+
+  """Группы кампаний"""
+  groups: [Group!]!
+
+  """Источники трафика"""
+  trafficSources: [TrafficSource!]!
+
+  """Активные офферы: поиск по фрагменту названия или началу ID"""
+  offers(search: String! = "", limit: Int! = 20): [Offer!]!
+
+  """Страны: поиск по названию или началу кода"""
+  countries(search: String! = ""): [Country!]!
+}
