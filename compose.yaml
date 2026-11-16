@@ -8,7 +8,9 @@ services:
       - path: .env
         required: false
     environment:
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-postgres}
       DATABASE_URL: postgresql+asyncpg://keitaro:keitaro@db:5432/keitaro
+      MONGO_URL: mongodb://mongo:27017/?directConnection=true
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -42,6 +44,24 @@ services:
       test: ["CMD", "pg_isready", "-U", "keitaro"]
       interval: 3s
       timeout: 3s
+      retries: 20
+
+  # Нужен только при STORAGE_BACKEND=mongo: docker compose --profile mongo up
+  mongo:
+    image: mongo:8
+    profiles: [mongo]
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    volumes:
+      - mongo-data:/data/db
+    healthcheck: &mongo-health
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - "try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'localhost:27017'}]}).ok }"
+      interval: 3s
+      timeout: 5s
       retries: 20
 
   frontend:
@@ -78,16 +98,8 @@ services:
       - "127.0.0.1:${TEST_MONGO_PORT:-57017}:27017"
     tmpfs:
       - /data/db
-    healthcheck: &mongo-health
-      test:
-        - CMD
-        - mongosh
-        - --quiet
-        - --eval
-        - "try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'localhost:27017'}]}).ok }"
-      interval: 3s
-      timeout: 5s
-      retries: 20
+    healthcheck: *mongo-health
 
 volumes:
   db-data:
+  mongo-data:

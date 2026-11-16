@@ -56,12 +56,24 @@ uv run alembic check                                          # модели и 
 | Линтеры | `uv run ruff check . && uv run ruff format --check .` | `corepack pnpm lint` |
 | Типы | `uv run pyright` | `corepack pnpm typecheck` |
 
-Тесты хранилища на настоящей базе (без неё они пропускаются с причиной, в CI пропуск запрещён):
+Тесты хранилища на настоящих базах (без них пропускаются с причиной, в CI пропуск запрещён):
 
 ```
-docker compose --profile test up -d db-test
-TEST_DATABASE_URL=postgresql+asyncpg://keitaro:keitaro@127.0.0.1:55432/keitaro_test uv run pytest -q
+docker compose --profile test up -d --wait db-test mongo-test
+export TEST_DATABASE_URL=postgresql+asyncpg://keitaro:keitaro@127.0.0.1:55432/keitaro_test
+export TEST_MONGO_URL="mongodb://127.0.0.1:57017/?directConnection=true"
+uv run pytest -q
 ```
+
+### Хранилище
+
+`STORAGE_BACKEND` в `.env` выбирает реализацию; сервисы и GraphQL от неё не зависят, оба адаптера проходят один набор тестов (`backend/tests/storage/test_contract.py`).
+
+| Значение | Что нужно | Запуск |
+|----------|-----------|--------|
+| `postgres` (по умолчанию) | Postgres, миграции Alembic | `docker compose up --build` |
+| `mongo` | MongoDB одним узлом replica set (нужен транзакциям), индексы создаются при старте | `STORAGE_BACKEND=mongo docker compose --profile mongo up --build` |
+| `memory` | ничего, данные живут до перезапуска | — |
 
 Хуки перед коммитом (линтеры, поиск секретов, формат сообщения):
 
