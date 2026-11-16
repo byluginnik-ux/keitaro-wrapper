@@ -1,0 +1,22 @@
+# Наружу открыт только фронт. Бэкенд доступен BFF по внутренней сети (R-ARCH-04).
+services:
+  backend:
+    build: ./backend
+    env_file:
+      - path: .env
+        required: false
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  frontend:
+    build: ./frontend
+    environment:
+      NUXT_BACKEND_GRAPHQL_URL: http://backend:8000/graphql
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
