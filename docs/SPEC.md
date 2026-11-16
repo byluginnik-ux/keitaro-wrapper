@@ -216,9 +216,10 @@ Admin API: база `{KEITARO_BASE_URL}/admin_api/v1`, заголовок `Api-K
 | Требования | Фича | Тест |
 |------------|------|------|
 | R-ARCH-01, R-ARCH-02, R-ARCH-08, R-ARCH-09 | F02a | `contracts/tests/test_contract.py`, `contracts/scripts/check.sh` |
-| R-ARCH-03 | F02 | — |
+| R-ARCH-03 | F02 | `backend/tests/graphql/test_contract_conformance.py`, `backend/tests/graphql/test_catalog_queries.py` |
 | R-KT-01 … R-KT-04, R-KT-06 | F01 | `backend/tests/keitaro/test_client.py` |
-| R-KT-05, R-KT-07 | F02, F07 | — |
+| R-KT-07 | F02 | `backend/tests/services/test_catalog.py`, `backend/tests/services/test_countries.py` |
+| R-KT-05 | F07 | — |
 | R-ST-01 … R-ST-05 | F03, F04 | — |
 | R-CR-01 … R-CR-12 | F05 | — |
 | R-SH-01 … R-SH-09, S7, S8 | F06 | `backend/tests/services/test_shares.py` |
