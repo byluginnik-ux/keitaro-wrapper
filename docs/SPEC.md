@@ -258,6 +258,7 @@ Admin API: база `{KEITARO_BASE_URL}/admin_api/v1`, заголовок `Api-K
 | R-TK-06 … R-TK-09 | F19 | `backend/tests/services/test_tasks.py`, `backend/tests/graphql/test_tasks.py`, `frontend/tests/server/tasks.test.ts` |
 | R-UX-30 … R-UX-32 | F19 | `frontend/tests/app/tasks.test.ts`, `frontend/tests/e2e/tasks.spec.ts`; R-UX-32 — проверка в браузере |
 | R-CH-01 … R-CH-05 | F20 | `backend/tests/cache/test_contract.py` (память и Redis), `backend/tests/cache/test_redis.py`, `backend/tests/services/test_catalog.py`, `backend/tests/services/test_creator.py` (сброс доменов) |
+| R-OPS-06 | F21 | `backend/tests/test_load_script.py` (критерии и подсчёт); прогон `backend/scripts/load.py` на стеке с поддельным трекером (см. README) |
 | R-OPS-04, R-OPS-05 | F21 | `backend/tests/test_health.py`, `backend/tests/storage/test_factory.py` |
 | R-OPS-01 … R-OPS-03 | F21 | проверка запуском стека: `docker compose up --build --scale worker=2` с поддельным трекером (см. README) |
 | R-UX-18 | F17 | `frontend/tests/app/editor.test.ts`, `frontend/tests/e2e/editor.spec.ts` |
