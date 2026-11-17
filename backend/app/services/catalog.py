@@ -1,5 +1,6 @@
 import time
 from collections.abc import Awaitable, Callable
+from typing import Any
 
 from pydantic import TypeAdapter
 
@@ -33,6 +34,8 @@ class CatalogService:
         self._cache = cache or MemoryCache(clock)
         self._ttl = ttl
         self._offers_ttl = ttl if offers_ttl is None else offers_ttl
+        # the text last seen in the cache and what it was parsed into, per list
+        self._parsed: dict[str, tuple[str, list[Any]]] = {}
 
     async def domains(self) -> list[Domain]:
         return await self._kept("domains", DOMAINS, self._ttl, self._keitaro.list_domains)
@@ -86,6 +89,12 @@ class CatalogService:
             return shape.dump_json(await read()).decode()
 
         try:
-            return shape.validate_json(await self._cache.get_or_load(key, ttl, load))
+            text = await self._cache.get_or_load(key, ttl, load)
         except CacheUnavailableError:
             return await read()
+        seen = self._parsed.get(key)
+        if seen is not None and seen[0] == text:
+            return seen[1]
+        parsed = shape.validate_json(text)
+        self._parsed[key] = (text, parsed)
+        return parsed

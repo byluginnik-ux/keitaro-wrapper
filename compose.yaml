@@ -13,6 +13,8 @@ x-backend: &backend
     MONGO_URL: mongodb://mongo:27017/?directConnection=true
     MESSAGE_BUS: rabbitmq
     RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    # процессов веб-сервера бэкенда (uvicorn читает сам); отправителю и обработчику не нужна
+    WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
     CACHE_BACKEND: redis
     REDIS_URL: redis://redis:6379/0
   depends_on: &backend-needs
