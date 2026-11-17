@@ -3,13 +3,23 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from pymongo import AsyncMongoClient
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from app.settings import Settings
 from app.storage.memory import create_memory_storage
 from app.storage.mongo.adapter import create_mongo_storage, prepare
 from app.storage.ports import Storage
 from app.storage.sqlalchemy.adapter import create_sqlalchemy_storage
+
+
+def create_engine(settings: Settings) -> AsyncEngine:
+    """Build the engine of the configured database."""
+    return create_async_engine(settings.database_url, pool_pre_ping=True)
+
+
+def create_mongo_client(settings: Settings) -> AsyncMongoClient[dict[str, Any]]:
+    """Build the client of the configured MongoDB."""
+    return AsyncMongoClient(settings.mongo_url, uuidRepresentation="standard", tz_aware=True)
 
 
 @asynccontextmanager
@@ -19,9 +29,7 @@ async def open_storage(settings: Settings) -> AsyncGenerator[Storage]:
         case "memory":
             yield create_memory_storage()
         case "mongo":
-            client: AsyncMongoClient[dict[str, Any]] = AsyncMongoClient(
-                settings.mongo_url, uuidRepresentation="standard", tz_aware=True
-            )
+            client = create_mongo_client(settings)
             try:
                 database = client[settings.mongo_database]
                 await prepare(database)
@@ -29,7 +37,7 @@ async def open_storage(settings: Settings) -> AsyncGenerator[Storage]:
             finally:
                 await client.close()
         case "postgres":
-            engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+            engine = create_engine(settings)
             try:
                 yield create_sqlalchemy_storage(engine)
             finally:

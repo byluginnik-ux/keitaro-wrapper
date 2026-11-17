@@ -18,12 +18,16 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://keitaro:keitaro@db:5432/keitaro"
     mongo_url: str = "mongodb://mongo:27017/?directConnection=true"
     mongo_database: str = "keitaro"
+    db_pool_size: int = 5
+    db_max_overflow: int = 10
+    mongo_max_pool_size: int = 100
 
     message_bus: Literal["memory", "rabbitmq"] = "memory"
     rabbitmq_url: str = "amqp://guest:guest@rabbitmq:5672/"
     task_max_attempts: int = 3
     task_retry_delay: float = 5.0
     outbox_poll: float = 0.5
+    rabbitmq_prefetch: int = 10
 
     cache_backend: Literal["memory", "redis"] = "memory"
     redis_url: str = "redis://redis:6379/0"
