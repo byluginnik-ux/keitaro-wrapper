@@ -1,5 +1,7 @@
 """The outbox sender (R-EV-03)."""
 
+import asyncio
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -100,3 +102,77 @@ async def test_relay_hands_messages_to_consumers() -> None:
     await bus.close()
 
     assert [item.id for item in got] == [item.id for item in messages]
+
+
+async def test_whoever_wrote_a_message_sends_it_at_once() -> None:
+    """R-EV-03: a process without the sender's loop does not wait for another one's poll."""
+    storage, bus = create_memory_storage(), FlakyBus(healthy_for=-1)
+    messages = await queued(storage, 3)
+    relay = Relay(storage, bus, clock=Clock(), batch=2)
+
+    relay.nudge()
+    await relay.settle()
+
+    assert [item.id for item in bus.taken] == [item.id for item in messages]
+    assert await storage.outbox.backlog() == OutboxBacklog(0, None)
+
+
+async def test_bus_that_is_away_does_not_reach_whoever_wrote_the_message() -> None:
+    """R-EV-03: the request has been answered; the message waits for the relay."""
+    storage, bus = create_memory_storage(), FlakyBus(healthy_for=0)
+    await queued(storage, 1)
+    relay = Relay(storage, bus, clock=Clock())
+
+    relay.nudge()
+    await relay.settle()
+
+    assert bus.taken == []
+    assert (await storage.outbox.backlog()).waiting == 1
+
+
+async def test_many_nudges_make_one_sender_at_a_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    """R-EV-03: a burst of requests must not open a pass per request."""
+    storage, bus = create_memory_storage(), FlakyBus(healthy_for=-1)
+    relay = Relay(storage, bus, clock=Clock(), batch=10)
+    claim = storage.outbox.claim
+    inside = most = 0
+
+    async def watched(*, limit: int, now: datetime, lease: timedelta) -> list[OutboxMessage]:
+        nonlocal inside, most
+        inside += 1
+        most = max(most, inside)
+        await asyncio.sleep(0)
+        try:
+            return await claim(limit=limit, now=now, lease=lease)
+        finally:
+            inside -= 1
+
+    monkeypatch.setattr(storage.outbox, "claim", watched)
+
+    for number in range(100):
+        await storage.outbox.put(OutboxMessage(uuid4(), TOPIC, NOW, {"n": number}))
+        relay.nudge()
+        await asyncio.sleep(0)
+    await relay.settle()
+
+    assert most == 1
+    assert len(bus.taken) == 100
+
+
+async def test_running_relay_is_only_woken() -> None:
+    """R-EV-03: where the loop runs, a nudge starts no second sender."""
+    storage, bus = create_memory_storage(), FlakyBus(healthy_for=-1)
+    relay = Relay(storage, bus, clock=Clock())
+    loop = asyncio.create_task(relay.run(poll=60))
+    await asyncio.sleep(0.01)
+    await queued(storage, 1)
+
+    relay.nudge()
+    await asyncio.sleep(0.05)
+    sent = len(bus.taken)
+    loop.cancel()
+    with suppress(asyncio.CancelledError):
+        await loop
+    await relay.settle()
+
+    assert sent == 1

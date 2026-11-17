@@ -49,6 +49,10 @@ class Relay:
             await self._storage.outbox.mark_sent(sent, self._clock())
         return len(sent)
 
+    async def settle(self) -> None:
+        """Wait for whatever this process is sending on its own."""
+        raise NotImplementedError
+
     def nudge(self) -> None:
         """Tell the relay that something was just written; it need not wait for the next poll."""
         self._wake.set()

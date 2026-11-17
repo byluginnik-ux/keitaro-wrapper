@@ -350,6 +350,18 @@ describe('following a task (R-UX-18)', () => {
     }
 
     expect(await followTask('task-1', { load, wait, pause: 100, patience: 300 })).toBeNull()
-    expect(asked).toBe(4)
+    expect(asked).toBe(3)
+  })
+
+  it('asks soon at first and then less and less often', async () => {
+    const pauses: number[] = []
+    let asked = 0
+    const load = async () => state('running', (asked += 1) > 7)
+
+    const wait = async (ms: number) => void pauses.push(ms)
+
+    await followTask('task-1', { load, wait })
+
+    expect(pauses).toEqual([100, 200, 400, 800, 1000, 1000, 1000])
   })
 })
