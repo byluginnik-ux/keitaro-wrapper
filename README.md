@@ -3,6 +3,7 @@
 Обёртка над рекламным трекером Keitaro: создание кампаний с двумя потоками и редактор офферов в потоках с черновиком, пересчётом долей и публикацией в трекер.
 
 - [Запуск](#запуск) · [Архитектура](#архитектура) · [Что готово](#что-готово) · [Разработка](#разработка)
+- **Видео, 2 минуты:** [создаватор и редактор на живом Keitaro](https://github.com/byluginnik-ux/keitaro-wrapper/releases/download/demo-mvp/keitaro-wrapper-demo.mp4); сценарий записи — [demo/](demo/README.md).
 - Техническое задание — [docs/SPEC.md](docs/SPEC.md); архитектура подробно — [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); порядок показа — [docs/DEMO.md](docs/DEMO.md); как использовались ИИ-агенты — [docs/AI_USAGE.md](docs/AI_USAGE.md).
 
 ## Запуск
