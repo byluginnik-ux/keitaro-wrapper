@@ -246,7 +246,9 @@ Admin API: база `{KEITARO_BASE_URL}/admin_api/v1`, заголовок `Api-K
 | R-TK-01 … R-TK-03, R-EV-01, R-EV-02 | F15 | `backend/tests/storage/test_tasks_outbox.py` (на всех адаптерах) |
 | R-EV-03 | F16 | `backend/tests/messaging/test_relay.py` |
 | R-EV-04 … R-EV-06 | F16 | `backend/tests/messaging/test_bus.py` (память и настоящий RabbitMQ) |
-| R-CR-01 … R-CR-12 | F05 | `backend/tests/services/test_creator.py`, `backend/tests/graphql/test_create_campaign.py` |
+| R-CR-01 … R-CR-12 | F05, F18 | `backend/tests/services/test_creator.py`, `backend/tests/graphql/test_create_campaign.py` |
+| R-CR-13 … R-CR-15 | F18 | `backend/tests/services/test_creator.py` (повторная доставка, потерянный ответ на каждом шаге, компенсация), `backend/tests/keitaro/test_client.py` (поиск по alias), `backend/tests/test_runtime.py`, `frontend/tests/server/creator.test.ts` |
+| R-UX-06 | F18 | `frontend/tests/app/editor.test.ts` (ход задачи), `frontend/tests/e2e/creator.spec.ts` |
 | R-SH-01 … R-SH-09, S7, S8 | F06 | `backend/tests/services/test_shares.py` |
 | R-ED-01 … R-ED-08, S1, S6 | F07 | `backend/tests/services/test_editor_fetch.py`, `backend/tests/graphql/test_fetch_streams.py` |
 | R-ED-10 … R-ED-16, R-SH-06 … R-SH-08, S2, S4, S5, S7, S8 | F08 | `backend/tests/services/test_editor_draft.py`, `backend/tests/graphql/test_draft_mutations.py` |

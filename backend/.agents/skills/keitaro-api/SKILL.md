@@ -14,6 +14,7 @@ description: Работа с Keitaro Admin API в этом проекте — к
 |--------|--------|--------------|
 | Создать кампанию | `POST /campaigns` | `name`, `alias`, `type` (`position`\|`weight`), `group_id`, `traffic_source_id`, `domain_id` |
 | Удалить кампанию | `DELETE /campaigns/{id}` | перемещает в архив |
+| Найти кампанию по alias | `GET /campaigns` | список всех кампаний; чужие записи не разбирать моделью — сравнивать поле `alias` (проверено на живом трекере) |
 | Создать поток | `POST /streams` | обязательны `campaign_id`, `schema`, `type`, `name`, `action_type` |
 | Потоки кампании | `GET /campaigns/{id}/streams` | массив `Stream` с `offers[]`, `filters[]` |
 | Изменить поток | `PUT /streams/{id}` | любые поля `StreamObject`; `offers[]` заменяет состав целиком |
