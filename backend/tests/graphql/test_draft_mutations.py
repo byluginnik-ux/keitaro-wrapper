@@ -172,3 +172,65 @@ async def test_publication_refusals_are_typed() -> None:
         "KeitaroFailure",
         "StreamNotFound",
     ]
+
+
+CONFLICT = """
+  __typename
+  ... on Stream { version }
+  ... on StreamConflict { message stream { id version dirty offers { offerId share state } } }
+"""
+VERSION = "query($id: ID!) { streams(campaignId: $id) { id version } }"
+FETCH_VERSIONS = """
+mutation($id: Int!) {
+  fetchStreams(campaignKeitaroId: $id) {
+    ... on StreamsFetched { streams { id version } }
+  }
+}
+"""
+
+
+def versioned(name: str, arguments: str, declared: str) -> str:
+    return f"mutation({declared}) {{ result: {name}({arguments}) {{ {CONFLICT} }} }}"
+
+
+ADD_SEEN = versioned("addOffer", "input: $input", "$input: StreamOfferInput!")
+CANCEL_SEEN = versioned(
+    "cancelDraft", "streamId: $id, expectedVersion: $seen", "$id: ID!, $seen: Int"
+)
+PUSH_SEEN = versioned("pushStream", "streamId: $id, expectedVersion: $seen", "$id: ID!, $seen: Int")
+
+
+async def test_stream_tells_its_version_and_actions_raise_it(context: Context) -> None:
+    """R-CC-01, R-CC-06."""
+    fetched = await run(context, FETCH_VERSIONS, id=CAMPAIGN_ID)
+    stream = fetched["fetchStreams"]["streams"][1]
+
+    added = await run(
+        context,
+        ADD_SEEN,
+        input={"streamId": stream["id"], "offerId": D, "expectedVersion": stream["version"]},
+    )
+
+    assert added["result"] == {"__typename": "Stream", "version": stream["version"] + 1}
+
+
+async def test_outdated_action_answers_with_the_current_stream(
+    context: Context, stream_id: str
+) -> None:
+    """R-CC-06: the first window still shows version 1 after the second one removed B."""
+    seen = 1
+    await act(context, "removeOffer", stream_id, B)
+    stale = {"streamId": stream_id, "offerId": D, "expectedVersion": seen}
+
+    answers = [
+        (await run(context, ADD_SEEN, input=stale))["result"],
+        (await run(context, CANCEL_SEEN, id=stream_id, seen=seen))["result"],
+        (await run(context, PUSH_SEEN, id=stream_id, seen=seen))["result"],
+    ]
+
+    for answer in answers:
+        assert answer["__typename"] == "StreamConflict"
+        assert "изменён" in answer["message"]
+        assert answer["stream"]["version"] == seen + 1
+        assert answer["stream"]["dirty"] is True
+        assert [offer["share"] for offer in answer["stream"]["offers"]] == [50, 0, 50]

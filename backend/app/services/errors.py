@@ -1,4 +1,9 @@
+from typing import TYPE_CHECKING
+
 from app.keitaro.models import Domain
+
+if TYPE_CHECKING:
+    from app.services.models import Stream
 
 
 class DomainError(Exception):
@@ -106,9 +111,13 @@ class EmptyStreamError(DomainError):
 
 
 class StreamConflictError(DomainError):
-    """Somebody else changed the stream first; nothing of this request was applied (R-CC-03)."""
+    """Somebody else changed the stream first; nothing of this request was applied (R-CC-03).
+
+    `current` is the stream as it is stored now, when there is one to show (R-CC-06).
+    """
 
     code = "stream_conflict"
 
-    def __init__(self) -> None:
-        super().__init__("Поток изменён другим запросом — обновите его и повторите действие")
+    def __init__(self, current: "Stream | None" = None) -> None:
+        super().__init__("Поток изменён другим запросом — показано его актуальное состояние")
+        self.current = current

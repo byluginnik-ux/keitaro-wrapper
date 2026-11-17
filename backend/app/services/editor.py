@@ -139,25 +139,29 @@ class EditorService:
             )
         return FetchedStreams(campaign, sorted(saved, key=lambda stream: stream.position))
 
-    async def add_offer(self, stream_id: UUID, offer_id: int) -> Stream:
+    async def add_offer(
+        self, stream_id: UUID, offer_id: int, *, expected: int | None = None
+    ) -> Stream:
         """Put an offer into the draft; a removed one comes back (R-ED-10, 11)."""
-        stream = await self._stream(stream_id)
+        stream = await self._stream(stream_id, expected)
         if stream.kind != OFFERS_KIND:
             raise ValidationError(
                 {"streamId": "В этот поток офферы не добавляются: он не ведёт на офферы"}
             )
         known = _find(stream, offer_id)
         if known is not None:
-            return await self.bring_back(stream_id, offer_id)
+            return await self.bring_back(stream_id, offer_id, expected=expected)
         offer = await self._catalog.get_offer(offer_id)
         if offer is None:
             message = f"В Keitaro нет активного оффера {offer_id}"
             raise OfferNotFoundError(message)
         return await self._save(stream, [*stream.offers, OfferLink(offer.id, offer.name, 0)])
 
-    async def remove_offer(self, stream_id: UUID, offer_id: int) -> Stream:
+    async def remove_offer(
+        self, stream_id: UUID, offer_id: int, *, expected: int | None = None
+    ) -> Stream:
         """Take an offer out of the draft, keeping it for bringing back (R-ED-12)."""
-        stream = await self._stream(stream_id)
+        stream = await self._stream(stream_id, expected)
         target = _active(stream, offer_id)
         removed = replace(target, share=0, pinned=False, state=OfferState.REMOVED)
         links = [
@@ -167,9 +171,11 @@ class EditorService:
         ]
         return await self._save(stream, links)
 
-    async def bring_back(self, stream_id: UUID, offer_id: int) -> Stream:
+    async def bring_back(
+        self, stream_id: UUID, offer_id: int, *, expected: int | None = None
+    ) -> Stream:
         """Make a removed offer active again (R-ED-13)."""
-        stream = await self._stream(stream_id)
+        stream = await self._stream(stream_id, expected)
         target = _find(stream, offer_id)
         if target is None:
             message = f"В потоке нет оффера {offer_id}"
@@ -178,23 +184,27 @@ class EditorService:
             raise OfferAlreadyInStreamError(target.name)
         return await self._save(stream, _swap(stream, replace(target, state=OfferState.ACTIVE)))
 
-    async def pin_share(self, stream_id: UUID, offer_id: int, share: int) -> Stream:
+    async def pin_share(
+        self, stream_id: UUID, offer_id: int, share: int, *, expected: int | None = None
+    ) -> Stream:
         """Set a share by hand and keep it through recalculation (R-SH-06)."""
-        stream = await self._stream(stream_id)
+        stream = await self._stream(stream_id, expected)
         if not MIN_PINNED <= share <= TOTAL:
             raise ValidationError({"share": f"Доля — целое число от {MIN_PINNED} до {TOTAL}"})
         target = _active(stream, offer_id)
         return await self._save(stream, _swap(stream, replace(target, share=share, pinned=True)))
 
-    async def unpin_share(self, stream_id: UUID, offer_id: int) -> Stream:
+    async def unpin_share(
+        self, stream_id: UUID, offer_id: int, *, expected: int | None = None
+    ) -> Stream:
         """Let the offer take part in recalculation again (R-SH-07)."""
-        stream = await self._stream(stream_id)
+        stream = await self._stream(stream_id, expected)
         target = _active(stream, offer_id)
         return await self._save(stream, _swap(stream, replace(target, pinned=False)))
 
-    async def cancel(self, stream_id: UUID) -> Stream:
+    async def cancel(self, stream_id: UUID, *, expected: int | None = None) -> Stream:
         """Return the stream to its published snapshot (R-ED-14)."""
-        stream = await self._stream(stream_id)
+        stream = await self._stream(stream_id, expected)
         restored = replace(
             stream,
             offers=tuple(
@@ -210,9 +220,9 @@ class EditorService:
         )
         return await self._write(restored)
 
-    async def push(self, stream_id: UUID) -> Stream:
+    async def push(self, stream_id: UUID, *, expected: int | None = None) -> Stream:
         """Publish the draft: send the active offers and their shares to the tracker (R-ED-20)."""
-        stream = await self._stream(stream_id)
+        stream = await self._stream(stream_id, expected)
         active = [link for link in stream.offers if link.state is OfferState.ACTIVE]
         if not active:
             raise EmptyStreamError(stream.name)
@@ -256,13 +266,15 @@ class EditorService:
                     self._entry("stream.pushed", stream.campaign_id, stream.id, details)
                 )
         except StorageConflictError as error:
-            raise StreamConflictError from error
+            raise StreamConflictError(await self._storage.streams.get(stream.id)) from error
         return saved
 
-    async def _stream(self, stream_id: UUID) -> Stream:
+    async def _stream(self, stream_id: UUID, expected: int | None = None) -> Stream:
+        """Read the stream the user acts on; `expected` is the version they saw (R-CC-06)."""
         stream = await self._storage.streams.get(stream_id)
         if stream is None:
             raise StreamNotFoundError
+        del expected  # not checked yet
         return stream
 
     async def _save(self, stream: Stream, links: Sequence[OfferLink]) -> Stream:
@@ -284,7 +296,7 @@ class EditorService:
         try:
             return await self._storage.streams.save(stream)
         except StorageConflictError as error:
-            raise StreamConflictError from error
+            raise StreamConflictError(await self._storage.streams.get(stream.id)) from error
 
     def _adopt(self, theirs: tracker.Campaign) -> Campaign:
         """Describe a campaign made outside this service (R-ED-07)."""

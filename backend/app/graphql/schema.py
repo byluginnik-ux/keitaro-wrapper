@@ -138,8 +138,9 @@ class Mutation:
         input: gql.StreamOfferInput,  # noqa: A002 — the argument name is fixed by the contract
     ) -> gql.StreamResult:
         editor = info.context.editor
+        expected = mappers.optional(input.expected_version)
         return await stream_result(
-            input.stream_id, lambda id_: editor.add_offer(id_, input.offer_id)
+            input.stream_id, lambda id_: editor.add_offer(id_, input.offer_id, expected=expected)
         )
 
     @strawberry.mutation(
@@ -153,8 +154,9 @@ class Mutation:
         input: gql.StreamOfferInput,  # noqa: A002 — the argument name is fixed by the contract
     ) -> gql.StreamResult:
         editor = info.context.editor
+        expected = mappers.optional(input.expected_version)
         return await stream_result(
-            input.stream_id, lambda id_: editor.remove_offer(id_, input.offer_id)
+            input.stream_id, lambda id_: editor.remove_offer(id_, input.offer_id, expected=expected)
         )
 
     @strawberry.mutation(description="Вернуть убранный оффер")
@@ -164,8 +166,9 @@ class Mutation:
         input: gql.StreamOfferInput,  # noqa: A002 — the argument name is fixed by the contract
     ) -> gql.StreamResult:
         editor = info.context.editor
+        expected = mappers.optional(input.expected_version)
         return await stream_result(
-            input.stream_id, lambda id_: editor.bring_back(id_, input.offer_id)
+            input.stream_id, lambda id_: editor.bring_back(id_, input.offer_id, expected=expected)
         )
 
     @strawberry.mutation(
@@ -177,8 +180,10 @@ class Mutation:
         input: gql.PinShareInput,  # noqa: A002 — the argument name is fixed by the contract
     ) -> gql.StreamResult:
         editor = info.context.editor
+        expected = mappers.optional(input.expected_version)
         return await stream_result(
-            input.stream_id, lambda id_: editor.pin_share(id_, input.offer_id, input.share)
+            input.stream_id,
+            lambda id_: editor.pin_share(id_, input.offer_id, input.share, expected=expected),
         )
 
     @strawberry.mutation(description="Снять закрепление; оффер снова участвует в пересчёте")
@@ -188,23 +193,38 @@ class Mutation:
         input: gql.StreamOfferInput,  # noqa: A002 — the argument name is fixed by the contract
     ) -> gql.StreamResult:
         editor = info.context.editor
+        expected = mappers.optional(input.expected_version)
         return await stream_result(
-            input.stream_id, lambda id_: editor.unpin_share(id_, input.offer_id)
+            input.stream_id, lambda id_: editor.unpin_share(id_, input.offer_id, expected=expected)
         )
 
     @strawberry.mutation(
         description="Отменить черновик: поток возвращается к опубликованному снимку"
     )
-    async def cancel_draft(self, info: AppInfo, stream_id: strawberry.ID) -> gql.StreamResult:
-        return await stream_result(stream_id, info.context.editor.cancel)
+    async def cancel_draft(
+        self,
+        info: AppInfo,
+        stream_id: strawberry.ID,
+        expected_version: strawberry.Maybe[int | None] = None,
+    ) -> gql.StreamResult:
+        editor = info.context.editor
+        expected = mappers.optional(expected_version)
+        return await stream_result(stream_id, lambda id_: editor.cancel(id_, expected=expected))
 
     @strawberry.mutation(
         description=(
             "Опубликовать черновик: отправить в Keitaro активные офферы потока с их долями"
         )
     )
-    async def push_stream(self, info: AppInfo, stream_id: strawberry.ID) -> gql.StreamResult:
-        return await stream_result(stream_id, info.context.editor.push)
+    async def push_stream(
+        self,
+        info: AppInfo,
+        stream_id: strawberry.ID,
+        expected_version: strawberry.Maybe[int | None] = None,
+    ) -> gql.StreamResult:
+        editor = info.context.editor
+        expected = mappers.optional(expected_version)
+        return await stream_result(stream_id, lambda id_: editor.push(id_, expected=expected))
 
 
 MAX_TOKENS = 1000

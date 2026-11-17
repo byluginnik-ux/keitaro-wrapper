@@ -1,3 +1,4 @@
+from collections.abc import Awaitable, Callable
 from uuid import uuid4
 
 import pytest
@@ -8,6 +9,7 @@ from app.services.errors import (
     OfferAlreadyInStreamError,
     OfferNotFoundError,
     ShareOverflowError,
+    StreamConflictError,
     StreamNotFoundError,
     ValidationError,
 )
@@ -304,3 +306,58 @@ async def test_unknown_stream_is_refused(editor: EditorService) -> None:
     for action in actions:
         with pytest.raises(StreamNotFoundError):
             await action()
+
+
+type Action = Callable[[EditorService, Stream, int], Awaitable[Stream]]
+
+ACTIONS: dict[str, Action] = {
+    "add": lambda editor, stream, seen: editor.add_offer(stream.id, D, expected=seen),
+    "remove": lambda editor, stream, seen: editor.remove_offer(stream.id, B, expected=seen),
+    "pin": lambda editor, stream, seen: editor.pin_share(stream.id, A, 50, expected=seen),
+    "cancel": lambda editor, stream, seen: editor.cancel(stream.id, expected=seen),
+    "push": lambda editor, stream, seen: editor.push(stream.id, expected=seen),
+}
+
+
+async def test_action_on_the_version_the_user_saw_is_applied(
+    editor: EditorService, stream: Stream
+) -> None:
+    """R-CC-06, R-CC-01."""
+    added = await editor.add_offer(stream.id, D, expected=stream.version)
+    pinned = await editor.pin_share(stream.id, A, 50, expected=added.version)
+
+    assert (added.version, pinned.version) == (stream.version + 1, stream.version + 2)
+    assert shares(pinned) == {A: 50, B: 17, C: 17, D: 16}
+
+
+@pytest.mark.parametrize("action", sorted(ACTIONS))
+async def test_action_on_an_outdated_stream_is_refused_with_the_current_one(
+    editor: EditorService, storage: Storage, keitaro: FakeKeitaro, stream: Stream, action: str
+) -> None:
+    """R-CC-06: another window removed C after this one loaded the stream."""
+    current = await editor.remove_offer(stream.id, C)
+
+    with pytest.raises(StreamConflictError) as refusal:
+        await ACTIONS[action](editor, stream, stream.version)
+
+    assert refusal.value.current == current
+    assert refusal.value.current is not None
+    assert refusal.value.current.version == current.version
+    assert await unchanged(storage, current)
+    assert all(keitaro.calls[write] == 0 for write in WRITES)
+
+
+async def test_unpin_and_bring_back_check_the_version_too(
+    editor: EditorService, stream: Stream
+) -> None:
+    """R-CC-06."""
+    pinned = await editor.pin_share(stream.id, A, 50)
+    removed = await editor.remove_offer(stream.id, C)
+
+    with pytest.raises(StreamConflictError):
+        await editor.unpin_share(stream.id, A, expected=pinned.version)
+    with pytest.raises(StreamConflictError):
+        await editor.bring_back(stream.id, C, expected=pinned.version)
+    restored = await editor.bring_back(stream.id, C, expected=removed.version)
+
+    assert link(restored, C).state is ACTIVE

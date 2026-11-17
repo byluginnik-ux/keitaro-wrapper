@@ -107,6 +107,7 @@ def to_stream(stream: models.Stream) -> gql.Stream:
         position=stream.position,
         kind=stream.kind,
         dirty=stream.dirty,
+        version=stream.version,
         offers=[to_stream_offer(link) for link in stream.offers],
     )
 
@@ -118,6 +119,11 @@ def to_streams_fetched(fetched: FetchedStreams) -> gql.StreamsFetched:
     )
 
 
+def optional[T](value: strawberry.Some[T | None] | None) -> T | None:
+    """Read an input field that may be left out: absent and null mean the same here."""
+    return value.value if value is not None else None
+
+
 def to_uuid(value: strawberry.ID) -> UUID | None:
     """Read our identifier; anything else simply matches nothing."""
     try:
@@ -127,7 +133,8 @@ def to_uuid(value: strawberry.ID) -> UUID | None:
 
 
 type StreamRefusal = (
-    gql.StreamNotFound
+    gql.StreamConflict
+    | gql.StreamNotFound
     | gql.OfferNotFound
     | gql.OfferAlreadyInStream
     | gql.ShareOverflow
