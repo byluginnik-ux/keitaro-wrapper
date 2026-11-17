@@ -15,16 +15,28 @@ from app.services.errors import (
     KeitaroError,
     OfferAlreadyInStreamError,
     OfferNotFoundError,
+    StreamConflictError,
     StreamNotFoundError,
     ValidationError,
 )
-from app.services.models import AuditEntry, Campaign, Details, OfferLink, Published, Stream
+from app.services.models import (
+    AuditEntry,
+    Campaign,
+    Details,
+    OfferLink,
+    Published,
+    Stream,
+    campaign_uuid,
+    stream_uuid,
+)
 from app.services.shares import TOTAL, OfferShare, OfferState, recalculate
+from app.storage.errors import StorageConflictError
 from app.storage.ports import Storage
 
 ACTIVE = "active"
 OFFERS_KIND = "landings"
 MIN_PINNED = 1
+FETCH_ATTEMPTS = 3
 
 
 def _find(stream: Stream, offer_id: int) -> OfferLink | None:
@@ -76,7 +88,20 @@ class EditorService:
         return await self._storage.streams.list_by_campaign(campaign_id)
 
     async def fetch(self, keitaro_campaign_id: int) -> FetchedStreams:
-        """Load the streams of a campaign from the tracker and reconcile them with ours."""
+        """Load the streams of a campaign from the tracker and reconcile them with ours.
+
+        Somebody may write the same campaign while the tracker answers. Then the
+        load starts over from what is stored now: a second load of the same
+        campaign finds the first one's result, a new draft is refused (R-CC-04, 05).
+        """
+        for _ in range(FETCH_ATTEMPTS):
+            try:
+                return await self._fetch(keitaro_campaign_id)
+            except StorageConflictError:
+                continue
+        raise StreamConflictError
+
+    async def _fetch(self, keitaro_campaign_id: int) -> FetchedStreams:
         campaign = await self._storage.campaigns.get_by_keitaro_id(keitaro_campaign_id)
         ours = await self.streams(campaign.id) if campaign else []
         drafts = [stream.name for stream in ours if stream.dirty]
@@ -96,17 +121,23 @@ class EditorService:
 
         known = {stream.keitaro_id: stream for stream in ours}
         merged = [await self._reconcile(campaign.id, known.get(item.id), item) for item in theirs]
-        if adopted is not None:
-            await self._storage.campaigns.add(adopted)
-        await self._storage.streams.save_all(merged)
         kept = {stream.id for stream in merged}
-        for stream in ours:
-            if stream.id not in kept:
-                await self._storage.streams.delete(stream.id)
-        await self._record(
-            "streams.fetched", campaign, {"keitaro_id": campaign.keitaro_id, "streams": len(merged)}
-        )
-        return FetchedStreams(campaign, sorted(merged, key=lambda stream: stream.position))
+        async with self._storage.transaction() as work:
+            if adopted is not None:
+                await work.campaigns.add(adopted)
+            saved = await work.streams.save_all(merged)
+            for stream in ours:
+                if stream.id not in kept:
+                    await work.streams.delete(stream.id)
+            await work.audit.record(
+                self._entry(
+                    "streams.fetched",
+                    campaign.id,
+                    None,
+                    {"keitaro_id": campaign.keitaro_id, "streams": len(merged)},
+                )
+            )
+        return FetchedStreams(campaign, sorted(saved, key=lambda stream: stream.position))
 
     async def add_offer(self, stream_id: UUID, offer_id: int) -> Stream:
         """Put an offer into the draft; a removed one comes back (R-ED-10, 11)."""
@@ -177,8 +208,7 @@ class EditorService:
                 if link.published is not None
             ),
         )
-        await self._storage.streams.save(restored)
-        return restored
+        return await self._write(restored)
 
     async def push(self, stream_id: UUID) -> Stream:
         """Publish the draft: send the active offers and their shares to the tracker (R-ED-20)."""
@@ -203,7 +233,14 @@ class EditorService:
                 [tracker.StreamOffer(offer_id=link.offer_id, share=link.share) for link in active],
             )
         except KeitaroError as error:
-            await self._record_stream("stream.push_failed", stream, details | {"error": str(error)})
+            await self._storage.audit.record(
+                self._entry(
+                    "stream.push_failed",
+                    stream.campaign_id,
+                    stream.id,
+                    details | {"error": str(error)},
+                )
+            )
             raise
         published = replace(
             stream,
@@ -212,9 +249,15 @@ class EditorService:
                 for link in stream.offers
             ),
         )
-        await self._storage.streams.save(published)
-        await self._record_stream("stream.pushed", stream, details)
-        return published
+        try:
+            async with self._storage.transaction() as work:
+                saved = await work.streams.save(published)
+                await work.audit.record(
+                    self._entry("stream.pushed", stream.campaign_id, stream.id, details)
+                )
+        except StorageConflictError as error:
+            raise StreamConflictError from error
+        return saved
 
     async def _stream(self, stream_id: UUID) -> Stream:
         stream = await self._storage.streams.get(stream_id)
@@ -234,14 +277,19 @@ class EditorService:
             replace(link, share=part.share, pinned=part.pinned)
             for link, part in zip(links, split, strict=True)
         )
-        updated = replace(stream, offers=offers)
-        await self._storage.streams.save(updated)
-        return updated
+        return await self._write(replace(stream, offers=offers))
+
+    async def _write(self, stream: Stream) -> Stream:
+        """Store the stream unless somebody changed it since it was read (R-CC-02, 03)."""
+        try:
+            return await self._storage.streams.save(stream)
+        except StorageConflictError as error:
+            raise StreamConflictError from error
 
     def _adopt(self, theirs: tracker.Campaign) -> Campaign:
         """Describe a campaign made outside this service (R-ED-07)."""
         return Campaign(
-            id=uuid4(),
+            id=campaign_uuid(theirs.id),
             keitaro_id=theirs.id,
             name=theirs.name,
             alias=theirs.alias,
@@ -271,13 +319,14 @@ class EditorService:
             if link.offer_id not in still_there
         ]
         return Stream(
-            id=ours.id if ours else uuid4(),
+            id=ours.id if ours else stream_uuid(theirs.id),
             campaign_id=campaign_id,
             keitaro_id=theirs.id,
             name=theirs.name,
             position=theirs.position,
             kind=theirs.kind,
             offers=tuple(links),
+            version=ours.version if ours else 0,
         )
 
     async def _published_link(
@@ -298,26 +347,15 @@ class EditorService:
         offer = await self._catalog.get_offer(offer_id)
         return offer.name if offer else f"Оффер {offer_id}"
 
-    async def _record_stream(self, action: str, stream: Stream, details: Details) -> None:
-        """Write a publication to the journal with what was and what became (R-ED-24)."""
-        await self._storage.audit.record(
-            AuditEntry(
-                id=uuid4(),
-                action=action,
-                created_at=self._clock(),
-                campaign_id=stream.campaign_id,
-                stream_id=stream.id,
-                details=details,
-            )
-        )
-
-    async def _record(self, action: str, campaign: Campaign, details: Details) -> None:
-        await self._storage.audit.record(
-            AuditEntry(
-                id=uuid4(),
-                action=action,
-                created_at=self._clock(),
-                campaign_id=campaign.id,
-                details=details,
-            )
+    def _entry(
+        self, action: str, campaign_id: UUID, stream_id: UUID | None, details: Details
+    ) -> AuditEntry:
+        """One line of the journal; a publication carries what was and what became (R-ED-24)."""
+        return AuditEntry(
+            id=uuid4(),
+            action=action,
+            created_at=self._clock(),
+            campaign_id=campaign_id,
+            stream_id=stream_id,
+            details=details,
         )

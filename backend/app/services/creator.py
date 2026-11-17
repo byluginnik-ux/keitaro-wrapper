@@ -12,7 +12,16 @@ from app.keitaro.gateway import KeitaroGateway
 from app.services.catalog import CatalogService
 from app.services.countries import find_country
 from app.services.errors import CampaignCreationError, KeitaroError, ValidationError
-from app.services.models import AuditEntry, Campaign, Details, OfferLink, Published, Stream
+from app.services.models import (
+    AuditEntry,
+    Campaign,
+    Details,
+    OfferLink,
+    Published,
+    Stream,
+    campaign_uuid,
+    stream_uuid,
+)
 from app.storage.ports import Storage
 
 ALIAS_ALPHABET = string.ascii_lowercase + string.digits
@@ -234,7 +243,7 @@ class CreatorService:
             )
         )
         campaign = Campaign(
-            id=uuid4(),
+            id=campaign_uuid(created.id),
             keitaro_id=created.id,
             name=created.name,
             alias=created.alias,
@@ -245,21 +254,29 @@ class CreatorService:
             traffic_source_id=created.traffic_source_id,
         )
         offer = OfferLink(plan.offer.id, plan.offer.name, 100, published=Published(100))
-        await self._storage.campaigns.add(campaign)
-        await self._storage.streams.save_all(
-            [
-                Stream(uuid4(), campaign.id, first.id, first.name, first.position, first.kind),
-                Stream(
-                    uuid4(),
-                    campaign.id,
-                    second.id,
-                    second.name,
-                    second.position,
-                    second.kind,
-                    (offer,),
-                ),
-            ]
-        )
+        async with self._storage.transaction() as work:
+            await work.campaigns.add(campaign)
+            await work.streams.save_all(
+                [
+                    Stream(
+                        stream_uuid(first.id),
+                        campaign.id,
+                        first.id,
+                        first.name,
+                        first.position,
+                        first.kind,
+                    ),
+                    Stream(
+                        stream_uuid(second.id),
+                        campaign.id,
+                        second.id,
+                        second.name,
+                        second.position,
+                        second.kind,
+                        (offer,),
+                    ),
+                ]
+            )
         return campaign
 
     async def _remove(self, keitaro_id: int) -> bool:

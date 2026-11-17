@@ -1,8 +1,11 @@
+import asyncio
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from uuid import UUID
 
 from app.services.models import AuditEntry, Campaign, Stream
+from app.storage.errors import DuplicateError, MissingParentError, StaleStreamError
 from app.storage.ports import Storage, UnitOfWork
 
 
@@ -11,6 +14,12 @@ class MemoryCampaigns:
         self.items: dict[UUID, Campaign] = {}
 
     async def add(self, campaign: Campaign) -> None:
+        taken = campaign.id in self.items or any(
+            item.keitaro_id == campaign.keitaro_id for item in self.items.values()
+        )
+        if taken:
+            message = f"campaign {campaign.keitaro_id} is already stored"
+            raise DuplicateError(message)
         self.items[campaign.id] = campaign
 
     async def get(self, campaign_id: UUID) -> Campaign | None:
@@ -36,16 +45,26 @@ class MemoryStreams:
         return sorted(found, key=lambda item: item.position)
 
     async def save(self, stream: Stream) -> Stream:
-        await self.save_all([stream])
-        return stream
+        return (await self.save_all([stream]))[0]
 
     async def save_all(self, streams: Sequence[Stream]) -> list[Stream]:
-        orphans = [item for item in streams if item.campaign_id not in self._campaigns.items]
-        if orphans:
-            message = f"campaign {orphans[0].campaign_id} is not stored"
-            raise LookupError(message)
-        self.items.update({item.id: item for item in streams})
-        return list(streams)
+        """Check every stream first, so a refusal leaves all of them as they were."""
+        for stream in streams:
+            if stream.campaign_id not in self._campaigns.items:
+                message = f"campaign {stream.campaign_id} is not stored"
+                raise MissingParentError(message)
+            stored = self.items.get(stream.id)
+            if (stored.version if stored else 0) != stream.version:
+                raise StaleStreamError(stream.id)
+            if any(
+                item.keitaro_id == stream.keitaro_id and item.id != stream.id
+                for item in self.items.values()
+            ):
+                message = f"stream {stream.keitaro_id} is already stored"
+                raise DuplicateError(message)
+        saved = [replace(stream, version=stream.version + 1) for stream in streams]
+        self.items.update({item.id: item for item in saved})
+        return saved
 
     async def delete(self, stream_id: UUID) -> None:
         self.items.pop(stream_id, None)
@@ -63,19 +82,22 @@ class MemoryAudit:
         return newest_first[:limit]
 
 
-@asynccontextmanager
-async def _no_transaction() -> AsyncGenerator[UnitOfWork]:
-    """Units of work are not implemented yet."""
-    raise NotImplementedError
-    yield
-
-
 def create_memory_storage() -> Storage:
     """Keep everything in process memory: for tests and for running without a database."""
     campaigns = MemoryCampaigns()
-    return Storage(
-        campaigns=campaigns,
-        streams=MemoryStreams(campaigns),
-        audit=MemoryAudit(),
-        transaction=_no_transaction,
-    )
+    streams = MemoryStreams(campaigns)
+    audit = MemoryAudit()
+    turn = asyncio.Lock()
+
+    @asynccontextmanager
+    async def transaction() -> AsyncGenerator[UnitOfWork]:
+        """One unit of work at a time; a failure puts everything back."""
+        async with turn:
+            before = (dict(campaigns.items), dict(streams.items), list(audit.entries))
+            try:
+                yield UnitOfWork(campaigns=campaigns, streams=streams, audit=audit)
+            except BaseException:
+                campaigns.items, streams.items, audit.entries = before
+                raise
+
+    return Storage(campaigns=campaigns, streams=streams, audit=audit, transaction=transaction)
