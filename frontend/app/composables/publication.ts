@@ -20,10 +20,11 @@ const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, m
  * Returns null when patience ran out — the task is still unfinished.
  */
 export async function followTask(taskId: string, options: FollowOptions): Promise<TaskView | null> {
-  const { load, pause = 400, patience = 120_000, wait = sleep } = options
+  const { load, pause = 400, patience = 120_000, wait = sleep, onUpdate } = options
   for (let waited = 0; waited <= patience; waited += pause) {
     try {
       const task = await load(taskId)
+      onUpdate?.(task)
       if (task.finished) return task
     }
     catch {
