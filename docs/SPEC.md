@@ -230,6 +230,7 @@ Admin API: база `{KEITARO_BASE_URL}/admin_api/v1`, заголовок `Api-K
 | R-ST-01 … R-ST-05 | F03, F04 | `backend/tests/storage/test_contract.py` (один набор для всех адаптеров) |
 | R-ST-06, R-CC-01, R-CC-02 | F13 | `backend/tests/storage/test_contract.py` |
 | R-CC-03 … R-CC-05 | F13 | `backend/tests/storage/test_concurrent_edits.py` (на всех адаптерах) |
+| R-CC-06, R-UX-17 | F14 | `backend/tests/services/test_editor_draft.py`, `backend/tests/graphql/test_draft_mutations.py`, `frontend/tests/server/editor.test.ts`, `frontend/tests/e2e/editor.spec.ts` (два окна) |
 | R-CR-01 … R-CR-12 | F05 | `backend/tests/services/test_creator.py`, `backend/tests/graphql/test_create_campaign.py` |
 | R-SH-01 … R-SH-09, S7, S8 | F06 | `backend/tests/services/test_shares.py` |
 | R-ED-01 … R-ED-08, S1, S6 | F07 | `backend/tests/services/test_editor_fetch.py`, `backend/tests/graphql/test_fetch_streams.py` |
