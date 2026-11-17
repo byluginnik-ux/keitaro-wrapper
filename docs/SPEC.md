@@ -243,7 +243,10 @@ Admin API: база `{KEITARO_BASE_URL}/admin_api/v1`, заголовок `Api-K
 | R-SH-01 … R-SH-09, S7, S8 | F06 | `backend/tests/services/test_shares.py` |
 | R-ED-01 … R-ED-08, S1, S6 | F07 | `backend/tests/services/test_editor_fetch.py`, `backend/tests/graphql/test_fetch_streams.py` |
 | R-ED-10 … R-ED-16, R-SH-06 … R-SH-08, S2, S4, S5, S7, S8 | F08 | `backend/tests/services/test_editor_draft.py`, `backend/tests/graphql/test_draft_mutations.py` |
-| R-ED-20 … R-ED-24, S3, S5 | F09 | `backend/tests/services/test_editor_push.py`, `backend/tests/graphql/test_draft_mutations.py` |
+| R-ED-20 … R-ED-26, S3, S5 | F09, F17 | `backend/tests/services/test_publisher.py`, `backend/tests/graphql/test_publish_stream.py`; поле занятости потока — `backend/tests/storage/test_contract.py` |
+| R-TK-04, R-TK-05 | F17 | `backend/tests/services/test_publisher.py`, `backend/tests/graphql/test_publish_stream.py`, `frontend/tests/server/editor.test.ts` |
+| R-EV-07 … R-EV-09 | F17 | `backend/tests/services/test_publisher.py`; путь через outbox и шину — `backend/tests/test_runtime.py` |
+| R-UX-18 | F17 | `frontend/tests/app/editor.test.ts`, `frontend/tests/e2e/editor.spec.ts` |
 | R-UX-20 … R-UX-24 | F10a | `frontend/tests/app/tokens.test.ts`, `frontend/tests/app/ui.test.ts`; R-UX-21, 23, 24 — проверка в браузере (F12) |
 | R-ARCH-04, R-ARCH-05 | F10b | `frontend/tests/server/graphql.test.ts`, `frontend/tests/server/creator.test.ts`, `frontend/tests/server/editor.test.ts` |
 | R-UX-01 … R-UX-05 | F10 | `frontend/tests/app/creator.test.ts`, `frontend/tests/app/ui.test.ts`, `frontend/tests/e2e/creator.spec.ts` |
