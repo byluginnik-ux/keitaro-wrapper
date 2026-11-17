@@ -60,6 +60,7 @@ export function stream(extra: Record<string, unknown> = {}) {
     position: 2,
     kind: 'landings',
     dirty: false,
+    version: 3,
     offers: [offer(1, 34), offer(2, 33), offer(3, 33)],
     ...extra,
   }

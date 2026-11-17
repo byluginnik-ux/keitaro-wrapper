@@ -22,8 +22,10 @@ export const campaignInput = v.object({
 })
 export const offerSearch = v.object({ search: v.optional(v.pipe(v.string(), v.trim()), '') })
 export const fetchInput = v.object({ keitaroId: idLike })
-export const streamRef = v.object({ streamId: text })
-export const offerRef = v.object({ streamId: text, offerId: idLike })
+/** The version of the stream the user was looking at; the backend decides what it means. */
+const seen = v.optional(idLike)
+export const streamRef = v.object({ streamId: text, version: seen })
+export const offerRef = v.object({ streamId: text, offerId: idLike, version: seen })
 export const offerBody = v.object({ offerId: id })
 /** The range of a share is a rule of the domain, so only the type is checked here. */
 export const shareBody = v.object({ share: v.pipe(v.number(), v.integer()) })

@@ -40,6 +40,7 @@ describe('editor screen', () => {
       position: 1,
       acceptsOffers: false,
       dirty: false,
+      version: 3,
       changes: 0,
       total: 0,
       offers: [],
@@ -112,15 +113,48 @@ describe('stream actions', () => {
     ['restore', 'BringBackOffer', { streamId: 's-2', offerId: '4' }, { input: { streamId: 's-2', offerId: 4 } }],
     ['pin', 'PinShare', { streamId: 's-2', offerId: '4', body: { share: 25 } }, { input: { streamId: 's-2', offerId: 4, share: 25 } }],
     ['unpin', 'UnpinShare', { streamId: 's-2', offerId: '4' }, { input: { streamId: 's-2', offerId: 4 } }],
-    ['cancel', 'CancelDraft', { streamId: 's-2' }, { streamId: 's-2' }],
-    ['push', 'PushStream', { streamId: 's-2' }, { streamId: 's-2' }],
-  ] as const)('%s calls %s and returns the whole stream', async (action, operation, input, variables) => {
+  ] as const)('%s calls %s with the version the user saw and returns the whole stream (R-CC-06)', async (action, operation, input, variables) => {
     const { graphql, calls } = fakeBackend({ [operation]: answer })
 
-    const view = await runStreamAction(graphql, action, input)
+    const view = await runStreamAction(graphql, action, { ...input, version: '3' })
 
-    expect(calls).toEqual([{ operation, variables }])
-    expect(view).toMatchObject({ id: 's-2', dirty: true, total: 100 })
+    expect(calls).toEqual([{ operation, variables: { input: { ...variables.input, expectedVersion: 3 } } }])
+    expect(view).toMatchObject({ id: 's-2', dirty: true, total: 100, version: 3 })
+  })
+
+  it.each([
+    ['cancel', 'CancelDraft'],
+    ['push', 'PushStream'],
+  ] as const)('%s calls %s with the version the user saw (R-CC-06)', async (action, operation) => {
+    const { graphql, calls } = fakeBackend({ [operation]: answer })
+
+    await runStreamAction(graphql, action, { streamId: 's-2', version: '3' })
+
+    expect(calls).toEqual([{ operation, variables: { streamId: 's-2', expectedVersion: 3 } }])
+  })
+
+  it('acts on what is stored when no version came', async () => {
+    const { graphql, calls } = fakeBackend({ PushStream: answer })
+
+    await runStreamAction(graphql, 'push', { streamId: 's-2' })
+
+    expect(calls[0]?.variables).toEqual({ streamId: 's-2' })
+  })
+
+  it('answers a conflict with the stream as it is now (R-CC-06)', async () => {
+    const current = stream({ dirty: true, version: 4, offers: [offer(1, 50), offer(3, 50)] })
+    const { graphql } = fakeBackend({
+      AddOffer: { result: { __typename: 'StreamConflict', message: 'Поток изменён', stream: current } },
+    })
+
+    const { status, body } = await refusal(
+      runStreamAction(graphql, 'add', { streamId: 's-2', version: 3, body: { offerId: 4 } }),
+    )
+
+    expect(status).toBe(409)
+    expect(body).toMatchObject({ code: 'stream_conflict', message: 'Поток изменён' })
+    expect(body.stream).toMatchObject({ id: 's-2', version: 4, total: 100 })
+    expect(body.stream?.offers.map(item => item.offerId)).toEqual([1, 3])
   })
 
   it.each([
@@ -159,6 +193,7 @@ describe('stream actions', () => {
     ['pin', { streamId: 's-2', offerId: 4, body: { share: '25%' } }],
     ['remove', { streamId: 's-2', offerId: 'x' }],
     ['push', { streamId: '' }],
+    ['push', { streamId: 's-2', version: 'latest' }],
   ] as const)('rejects malformed %s %j without asking the backend', async (action, input) => {
     const { graphql, calls } = fakeBackend({})
 
@@ -174,6 +209,6 @@ describe('stream actions', () => {
 
     await runStreamAction(graphql, 'pin', { streamId: 's-2', offerId: 4, body: { share: 250 } })
 
-    expect(calls[0]?.variables).toEqual({ input: { streamId: 's-2', offerId: 4, share: 250 } })
+    expect(calls[0]?.variables).toMatchObject({ input: { streamId: 's-2', offerId: 4, share: 250 } })
   })
 })

@@ -23,6 +23,8 @@ export type StreamAction = 'add' | 'remove' | 'restore' | 'pin' | 'unpin' | 'can
 export interface StreamActionInput {
   streamId: unknown
   offerId?: unknown
+  /** The version of the stream on the user's screen, from the query string. */
+  version?: unknown
   body?: unknown
 }
 

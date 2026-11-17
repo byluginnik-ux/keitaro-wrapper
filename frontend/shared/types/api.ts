@@ -10,6 +10,8 @@ export interface ApiError {
   code: string
   message: string
   fields?: FieldRemark[]
+  /** With `stream_conflict`: the stream as it is stored now (R-CC-06). */
+  stream?: StreamView
 }
 
 export interface Option<T> {
@@ -55,6 +57,8 @@ export interface StreamView {
   /** False for a redirect stream: it is shown without contents. */
   acceptsOffers: boolean
   dirty: boolean
+  /** The number of the stream's last write; every action sends it back (R-CC-06). */
+  version: number
   /** How many offers a publication would change. */
   changes: number
   /** Sum of the shares of active offers, as stored. */

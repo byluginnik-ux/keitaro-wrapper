@@ -13,6 +13,7 @@ fragment StreamFields on Stream {
   position
   kind
   dirty
+  version
   offers {
     offerId
     name
@@ -27,7 +28,7 @@ fragment StreamFields on Stream {
 fragment StreamOutcome on StreamResult {
   __typename
   ... on Stream { ...StreamFields }
-  ... on StreamConflict { message }
+  ... on StreamConflict { message stream { ...StreamFields } }
   ... on StreamNotFound { message }
   ... on OfferNotFound { message }
   ... on OfferAlreadyInStream { message }
@@ -70,5 +71,9 @@ mutation RemoveOffer($input: StreamOfferInput!) { result: removeOffer(input: $in
 mutation BringBackOffer($input: StreamOfferInput!) { result: bringBackOffer(input: $input) { ...StreamOutcome } }
 mutation PinShare($input: PinShareInput!) { result: pinShare(input: $input) { ...StreamOutcome } }
 mutation UnpinShare($input: StreamOfferInput!) { result: unpinShare(input: $input) { ...StreamOutcome } }
-mutation CancelDraft($streamId: ID!) { result: cancelDraft(streamId: $streamId) { ...StreamOutcome } }
-mutation PushStream($streamId: ID!) { result: pushStream(streamId: $streamId) { ...StreamOutcome } }
+mutation CancelDraft($streamId: ID!, $expectedVersion: Int) {
+  result: cancelDraft(streamId: $streamId, expectedVersion: $expectedVersion) { ...StreamOutcome }
+}
+mutation PushStream($streamId: ID!, $expectedVersion: Int) {
+  result: pushStream(streamId: $streamId, expectedVersion: $expectedVersion) { ...StreamOutcome }
+}

@@ -1,6 +1,6 @@
 export default defineApiHandler((event, graphql) =>
   runStreamAction(graphql, 'restore', {
-    streamId: getRouterParam(event, 'id'),
+    streamId: getRouterParam(event, 'id'), version: getQuery(event).version,
     offerId: getRouterParam(event, 'offerId'),
   }),
 )

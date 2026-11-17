@@ -35,6 +35,7 @@ export function toStreamView(stream: StreamFieldsFragment): StreamView {
     position: stream.position,
     acceptsOffers: stream.kind === OFFERS_KIND,
     dirty: stream.dirty,
+    version: stream.version,
     changes: offers.filter(offer => offer.changed).length,
     total: offers.reduce((sum, offer) => sum + offer.share, 0),
     offers,

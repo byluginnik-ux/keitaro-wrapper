@@ -186,3 +186,23 @@ test('the browser talks only to its own server (R-ARCH-04)', async ({ page, requ
 
   expect(foreign).toEqual([])
 })
+
+test('a stream changed in another window is shown as it is now (R-CC-06, R-UX-17)', async ({ page, context, request }) => {
+  await openCampaign(page, await makeCampaign(request))
+  const other = await context.newPage()
+  await other.goto(page.url())
+  await other.getByRole('button', { name: 'Удалить Offer B' }).click()
+  await expectRemoved(other, 'Offer B')
+
+  await addOffer(page, 'offer d', 'Offer D')
+
+  await expect(flow(page, 'Flow 2').getByRole('alert')).toContainText('Поток изменён')
+  await expectRemoved(page, 'Offer B')
+  await expectShares(page, { 'Offer A': 50, 'Offer C': 50 })
+  await expect(offerRow(page, 'Offer D')).toHaveCount(0)
+
+  await addOffer(page, 'offer d', 'Offer D')
+
+  await expectShares(page, { 'Offer A': 34, 'Offer C': 33, 'Offer D': 33 })
+  await expect(flow(page, 'Flow 2').getByRole('alert')).toHaveCount(0)
+})
