@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from app.services.models import AuditEntry, Campaign, OfferLink, Published, Stream
 from app.services.shares import OfferState
 from app.storage.errors import DuplicateError, MissingParentError, StaleStreamError
+from app.storage.pending import PendingOutbox, PendingTasks
 from app.storage.ports import Storage, UnitOfWork
 from app.storage.sqlalchemy.tables import AuditRow, CampaignRow, StreamOfferRow, StreamRow
 
@@ -257,12 +258,18 @@ def create_sqlalchemy_storage(engine: AsyncEngine) -> Storage:
                 yield session
 
             yield UnitOfWork(
-                campaigns=SqlCampaigns(joined), streams=SqlStreams(joined), audit=SqlAudit(joined)
+                campaigns=SqlCampaigns(joined),
+                streams=SqlStreams(joined),
+                audit=SqlAudit(joined),
+                tasks=PendingTasks(),
+                outbox=PendingOutbox(),
             )
 
     return Storage(
         campaigns=SqlCampaigns(sessions.begin),
         streams=SqlStreams(sessions.begin),
         audit=SqlAudit(sessions.begin),
+        tasks=PendingTasks(),
+        outbox=PendingOutbox(),
         transaction=transaction,
     )

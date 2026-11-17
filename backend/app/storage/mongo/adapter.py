@@ -17,6 +17,7 @@ from app.storage.errors import (
     StaleStreamError,
     StorageConflictError,
 )
+from app.storage.pending import PendingOutbox, PendingTasks
 from app.storage.ports import Storage, UnitOfWork
 
 type Document = dict[str, Any]
@@ -266,11 +267,15 @@ def create_mongo_storage(database: Database) -> Storage:
                         campaigns=MongoCampaigns(database, session),
                         streams=MongoStreams(database, session),
                         audit=MongoAudit(database, session),
+                        tasks=PendingTasks(),
+                        outbox=PendingOutbox(),
                     )
 
     return Storage(
         campaigns=MongoCampaigns(database),
         streams=MongoStreams(database),
         audit=MongoAudit(database),
+        tasks=PendingTasks(),
+        outbox=PendingOutbox(),
         transaction=transaction,
     )

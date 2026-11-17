@@ -6,6 +6,7 @@ from uuid import UUID
 
 from app.services.models import AuditEntry, Campaign, Stream
 from app.storage.errors import DuplicateError, MissingParentError, StaleStreamError
+from app.storage.pending import PendingOutbox, PendingTasks
 from app.storage.ports import Storage, UnitOfWork
 
 
@@ -95,9 +96,22 @@ def create_memory_storage() -> Storage:
         async with turn:
             before = (dict(campaigns.items), dict(streams.items), list(audit.entries))
             try:
-                yield UnitOfWork(campaigns=campaigns, streams=streams, audit=audit)
+                yield UnitOfWork(
+                    campaigns=campaigns,
+                    streams=streams,
+                    audit=audit,
+                    tasks=PendingTasks(),
+                    outbox=PendingOutbox(),
+                )
             except BaseException:
                 campaigns.items, streams.items, audit.entries = before
                 raise
 
-    return Storage(campaigns=campaigns, streams=streams, audit=audit, transaction=transaction)
+    return Storage(
+        campaigns=campaigns,
+        streams=streams,
+        audit=audit,
+        tasks=PendingTasks(),
+        outbox=PendingOutbox(),
+        transaction=transaction,
+    )

@@ -1,11 +1,15 @@
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import StrEnum
+from typing import Any
 from uuid import UUID, uuid5
 
 from app.services.shares import OfferState
 
 type Scalar = str | int | bool | None
 type Details = dict[str, Scalar | list[dict[str, Scalar]]]
+type Payload = dict[str, Any]
+"""Plain JSON: what a task was asked to do or what a message carries."""
 
 
 _IDS = UUID("6f1c2a54-3b7e-5d21-9c40-8a2f6e1d7b03")
@@ -94,3 +98,85 @@ class AuditEntry:
     campaign_id: UUID | None = None
     stream_id: UUID | None = None
     details: Details = field(default_factory=_no_details)
+
+
+class TaskKind(StrEnum):
+    PUBLISH_STREAM = "publish_stream"
+    CREATE_CAMPAIGN = "create_campaign"
+
+
+class TaskStatus(StrEnum):
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    REJECTED = "rejected"
+    CANCELLED = "cancelled"
+
+    @property
+    def final(self) -> bool:
+        return self in {TaskStatus.SUCCEEDED, TaskStatus.REJECTED, TaskStatus.CANCELLED}
+
+
+def _no_fields() -> dict[str, str]:
+    return {}
+
+
+def _no_payload() -> Payload:
+    return {}
+
+
+@dataclass(frozen=True, slots=True)
+class Refusal:
+    """Why a task ended without doing its work: a stable code and words for the user."""
+
+    code: str
+    message: str
+    fields: dict[str, str] = field(default_factory=_no_fields)
+    details: Payload = field(default_factory=_no_payload)
+
+
+@dataclass(frozen=True, slots=True)
+class TaskStep:
+    """One thing a task did, in the order it happened."""
+
+    name: str
+    at: datetime
+    note: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class Task:
+    """A change of the tracker that is carried out apart from the request (R-TK-01)."""
+
+    id: UUID
+    kind: TaskKind
+    created_at: datetime
+    fingerprint: str
+    payload: Payload = field(default_factory=_no_payload)
+    status: TaskStatus = TaskStatus.PENDING
+    attempts: int = 0
+    campaign_id: UUID | None = None
+    stream_id: UUID | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    refusal: Refusal | None = None
+    steps: tuple[TaskStep, ...] = ()
+    retry_of: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class OutboxMessage:
+    """A message that leaves together with the data change it tells about (R-EV-01)."""
+
+    id: UUID
+    topic: str
+    created_at: datetime
+    payload: Payload = field(default_factory=_no_payload)
+
+
+@dataclass(frozen=True, slots=True)
+class OutboxBacklog:
+    """How much is waiting to be sent and since when."""
+
+    waiting: int
+    oldest: datetime | None

@@ -13,6 +13,14 @@ class StaleStreamError(StorageConflictError):
         self.stream_id = stream_id
 
 
+class StaleTaskError(StorageConflictError):
+    """The task is not in the status the caller expected (R-TK-02)."""
+
+    def __init__(self, task_id: UUID) -> None:
+        super().__init__(f"task {task_id} is in another status")
+        self.task_id = task_id
+
+
 class DuplicateError(StorageConflictError):
     """A record with the same identity is already stored."""
 

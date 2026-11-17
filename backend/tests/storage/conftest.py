@@ -16,7 +16,7 @@ from app.storage.ports import Storage
 from app.storage.sqlalchemy.adapter import create_sqlalchemy_storage
 
 BACKEND = Path(__file__).parent.parent.parent
-TABLES = "audit_log, stream_offers, streams, campaigns"
+TABLES = "outbox, tasks, audit_log, stream_offers, streams, campaigns"
 
 
 def unavailable(name: str, variable: str) -> None:
