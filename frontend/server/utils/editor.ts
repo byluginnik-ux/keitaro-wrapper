@@ -8,14 +8,16 @@ import {
   EditorScreenDocument,
   FetchStreamsDocument,
   PinShareDocument,
+  PublishStreamDocument,
   RemoveOfferDocument,
+  TaskStateDocument,
   TrackerUrlDocument,
   UnpinShareDocument,
 } from '../graphql/operations'
 import { assertNever, conflict, fail } from './api-error'
 import type { GraphqlClient } from './graphql'
-import { fetchInput, offerBody, offerRef, parse, shareBody, streamRef } from './schemas'
-import { toCampaignView, toStreamView } from './views'
+import { fetchInput, offerBody, offerRef, parse, shareBody, streamRef, taskBody, taskRef } from './schemas'
+import { toCampaignView, toStreamView, toTaskView } from './views'
 
 export type StreamAction = 'add' | 'remove' | 'restore' | 'pin' | 'unpin' | 'cancel'
 
@@ -140,11 +142,33 @@ export async function runStreamAction(
 }
 
 /** Queue the publication of a stream; the answer is the task to follow (R-ED-20, R-TK-04). */
-export async function publishStream(_graphql: GraphqlClient, _input: StreamActionInput): Promise<TaskView> {
-  return fail(501, 'not_implemented', 'Публикация переводится на задачи')
+export async function publishStream(graphql: GraphqlClient, input: StreamActionInput): Promise<TaskView> {
+  const { streamId, version } = parse(streamRef, input)
+  const { taskId } = parse(taskBody, input.body)
+  const variables = { input: { streamId, taskId, expectedVersion: version } }
+  const { result } = await graphql(PublishStreamDocument, variables)
+  switch (result.__typename) {
+    case 'Task':
+      return toTaskView(result)
+    case 'StreamConflict':
+      return conflict(result.message, toStreamView(result.stream))
+    case 'StreamBusy':
+      return fail(409, 'stream_busy', result.message)
+    case 'StreamNotFound':
+      return fail(404, 'stream_not_found', result.message)
+    case 'EmptyStream':
+      return fail(422, 'empty_stream', result.message)
+    case 'TaskKeyReused':
+      return fail(409, 'task_key_reused', result.message)
+    default:
+      return assertNever(result)
+  }
 }
 
 /** How a task is doing (R-TK-05). */
-export async function loadTask(_graphql: GraphqlClient, _id: unknown): Promise<TaskView> {
-  return fail(501, 'not_implemented', 'Публикация переводится на задачи')
+export async function loadTask(graphql: GraphqlClient, id: unknown): Promise<TaskView> {
+  const { taskId } = parse(taskRef, { taskId: id })
+  const { task } = await graphql(TaskStateDocument, { id: taskId })
+  if (task === null) fail(404, 'task_not_found', 'Такой задачи нет')
+  return toTaskView(task)
 }

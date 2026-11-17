@@ -32,7 +32,7 @@ const emit = defineEmits<{
 
 const picked = ref<Option<number> | null>(null)
 /** A task is sending the stream to the tracker: nothing can be changed until it ends (R-UX-18). */
-const publishing = computed(() => props.pending === 'push')
+const publishing = computed(() => props.pending === 'push' || Boolean(props.stream.publishingTaskId))
 const locked = computed(() => Boolean(props.pending) || publishing.value)
 const taken = computed(() => props.stream.offers.map(offer => offer.offerId))
 const headingId = computed(() => `stream-${props.stream.id}`)
@@ -78,7 +78,14 @@ function add(option: Option<number> | null) {
       </h2>
       <span class="data stream__id">поток {{ stream.position }} · ID {{ stream.keitaroId }}</span>
       <UiBadge
-        v-if="stream.dirty"
+        v-if="publishing"
+        tone="accent"
+        role="status"
+      >
+        Публикуется…
+      </UiBadge>
+      <UiBadge
+        v-else-if="stream.dirty"
         tone="accent"
       >
         Не опубликовано
