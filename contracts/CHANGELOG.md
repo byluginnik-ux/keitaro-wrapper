@@ -2,6 +2,10 @@
 
 Версия одна для npm-пакета и пакета Python. Удаление или переименование — мажорная, добавление — минорная. До версии 1.0.0 ломающее изменение поднимает минорную версию и помечено словом «Ломающее».
 
+## 0.11.0
+
+- `retryTask` повторяет и отклонённое создание кампании; в `RetryTaskResult` добавлены `ValidationFailed` и `KeitaroFailure` — исчерпывающий разбор результата у потребителя нужно дополнить.
+
 ## 0.10.0
 
 - **Ломающее.** `createCampaign` ставит задачу: во входе обязательное `CreateCampaignInput.taskId`, результат — `CreateCampaignResult = Task | ValidationFailed | KeitaroFailure | TaskKeyReused` (вариант `Campaign` убран). Созданная кампания — в `Task.campaignId` завершённой задачи.

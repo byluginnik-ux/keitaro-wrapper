@@ -329,7 +329,7 @@ export type RetryTaskInput = {
   taskId: Scalars['ID']['input'];
 };
 
-export type RetryTaskResult = EmptyStream | StreamBusy | StreamNotFound | Task | TaskKeyReused | TaskNotFound | TaskNotRetryable;
+export type RetryTaskResult = EmptyStream | KeitaroFailure | StreamBusy | StreamNotFound | Task | TaskKeyReused | TaskNotFound | TaskNotRetryable | ValidationFailed;
 
 /** Настройки сервиса, которые нужны интерфейсу */
 export type ServiceInfo = {

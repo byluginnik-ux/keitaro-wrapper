@@ -23,6 +23,8 @@ mutation RetryTask($input: RetryTaskInput!) {
     ... on Task { ...TaskFields }
     ... on TaskNotFound { message }
     ... on TaskNotRetryable { message }
+    ... on ValidationFailed { message fields { field message } }
+    ... on KeitaroFailure { message }
     ... on StreamBusy { message }
     ... on StreamNotFound { message }
     ... on EmptyStream { message }

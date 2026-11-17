@@ -264,6 +264,8 @@ union RetryTaskResult =
   | Task
   | TaskNotFound
   | TaskNotRetryable
+  | ValidationFailed
+  | KeitaroFailure
   | StreamBusy
   | StreamNotFound
   | EmptyStream

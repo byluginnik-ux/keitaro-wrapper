@@ -52,6 +52,10 @@ export async function retryTask(graphql: GraphqlClient, id: unknown, body: unkno
       return fail(404, 'task_not_found', result.message)
     case 'TaskNotRetryable':
       return fail(409, 'task_not_retryable', result.message)
+    case 'ValidationFailed':
+      return fail(422, 'validation_failed', result.message, result.fields)
+    case 'KeitaroFailure':
+      return fail(502, 'keitaro_failure', result.message)
     case 'StreamBusy':
       return fail(409, 'stream_busy', result.message)
     case 'StreamNotFound':

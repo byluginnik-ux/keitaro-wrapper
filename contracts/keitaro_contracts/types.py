@@ -378,6 +378,8 @@ RetryTaskResult = Annotated[
     Task
     | TaskNotFound
     | TaskNotRetryable
+    | ValidationFailed
+    | KeitaroFailure
     | StreamBusy
     | StreamNotFound
     | EmptyStream
