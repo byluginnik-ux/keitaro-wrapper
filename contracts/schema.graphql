@@ -351,6 +351,9 @@ input PinShareInput {
 
 """Что создать: кампания с двумя потоками"""
 input CreateCampaignInput {
+  """Идентификатор новой задачи (UUID); повтор с ним же вернёт ту же задачу"""
+  taskId: ID!
+
   """Название с обязательным префиксом тестовых кампаний"""
   name: String!
 
@@ -390,7 +393,8 @@ type KeitaroFailure {
   createdDomain: Domain
 }
 
-union CreateCampaignResult = Campaign | ValidationFailed | KeitaroFailure
+# Поставленная задача создания либо причина, по которой она не поставлена.
+union CreateCampaignResult = Task | ValidationFailed | KeitaroFailure | TaskKeyReused
 
 """Настройки сервиса, которые нужны интерфейсу"""
 type ServiceInfo {

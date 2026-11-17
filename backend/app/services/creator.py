@@ -5,10 +5,11 @@ import string
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from app.keitaro import models as tracker
 from app.keitaro.gateway import KeitaroGateway
+from app.messaging.ports import Message
 from app.services.catalog import CatalogService
 from app.services.countries import find_country
 from app.services.errors import CampaignCreationError, KeitaroError, ValidationError
@@ -19,6 +20,7 @@ from app.services.models import (
     OfferLink,
     Published,
     Stream,
+    Task,
     campaign_uuid,
     stream_uuid,
 )
@@ -120,6 +122,18 @@ class CreatorService:
         self._name_prefix = name_prefix
         self._clock = clock
         self._new_alias = new_alias
+
+    async def request(self, request: NewCampaignRequest, task_id: UUID) -> Task:
+        """Check the form and queue the creation (R-CR-13)."""
+        raise NotImplementedError
+
+    async def handle(self, message: Message) -> None:
+        """Carry out a queued creation (R-CR-14, 15)."""
+        raise NotImplementedError
+
+    async def bury(self, message: Message) -> None:
+        """Close the task of a message nobody managed to handle (R-CR-15)."""
+        raise NotImplementedError
 
     async def create(self, request: NewCampaignRequest) -> Campaign:
         """Create the campaign or leave the tracker as it was (R-CR-07)."""

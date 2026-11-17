@@ -53,10 +53,12 @@ export type CreateCampaignInput = {
   newDomainName?: InputMaybe<Scalars['String']['input']>;
   /** Оффер второго потока */
   offerId: Scalars['Int']['input'];
+  /** Идентификатор новой задачи (UUID); повтор с ним же вернёт ту же задачу */
+  taskId: Scalars['ID']['input'];
   trafficSourceId: Scalars['Int']['input'];
 };
 
-export type CreateCampaignResult = Campaign | KeitaroFailure | ValidationFailed;
+export type CreateCampaignResult = KeitaroFailure | Task | TaskKeyReused | ValidationFailed;
 
 /** Домен трекера, на котором размещается кампания */
 export type Domain = {

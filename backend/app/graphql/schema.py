@@ -22,6 +22,7 @@ from app.services.errors import (
     DraftNotPublishedError,
     KeitaroError,
     StreamBusyError,
+    TaskKeyReusedError,
     TaskNotCancellableError,
     TaskNotFoundError,
     ValidationError,
@@ -134,13 +135,20 @@ class Mutation:
         info: AppInfo,
         input: gql.CreateCampaignInput,  # noqa: A002 — the argument name is fixed by the contract
     ) -> gql.CreateCampaignResult:
+        task_id = mappers.to_uuid(input.task_id)
+        if task_id is None:
+            raise ValidationError({"taskId": "Идентификатор задачи — UUID"})
         try:
-            campaign = await info.context.creator.create(mappers.to_new_campaign_request(input))
+            task = await info.context.creator.request(
+                mappers.to_new_campaign_request(input), task_id
+            )
         except ValidationError as error:
             return mappers.to_validation_failed(error)
         except KeitaroError as error:
             return mappers.to_keitaro_failure(error)
-        return mappers.to_campaign(campaign)
+        except TaskKeyReusedError as error:
+            return gql.TaskKeyReused(message=str(error))
+        return mappers.to_task(task)
 
     @strawberry.mutation(
         description=(

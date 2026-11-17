@@ -308,6 +308,9 @@ class PinShareInput:
 
 @strawberry.input(description="Что создать: кампания с двумя потоками")
 class CreateCampaignInput:
+    task_id: strawberry.ID = strawberry.field(
+        description="Идентификатор новой задачи (UUID); повтор с ним же вернёт ту же задачу"
+    )
     name: str = strawberry.field(description="Название с обязательным префиксом тестовых кампаний")
     country: str = strawberry.field(
         description="Код страны alpha-2: её посетителей первый поток уводит на Google"
@@ -357,13 +360,14 @@ StreamResult = Annotated[
     strawberry.union(name="StreamResult"),
 ]
 
-CreateCampaignResult = Annotated[
-    Campaign | ValidationFailed | KeitaroFailure, strawberry.union(name="CreateCampaignResult")
-]
-
 PublishStreamResult = Annotated[
     Task | StreamConflict | StreamBusy | StreamNotFound | EmptyStream | TaskKeyReused,
     strawberry.union(name="PublishStreamResult"),
+]
+
+CreateCampaignResult = Annotated[
+    Task | ValidationFailed | KeitaroFailure | TaskKeyReused,
+    strawberry.union(name="CreateCampaignResult"),
 ]
 
 CancelTaskResult = Annotated[

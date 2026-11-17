@@ -13,8 +13,9 @@ query SearchOffers($search: String!, $limit: Int!) {
 mutation CreateCampaign($input: CreateCampaignInput!) {
   createCampaign(input: $input) {
     __typename
-    ... on Campaign { ...CampaignFields }
+    ... on Task { ...TaskFields }
     ... on ValidationFailed { message fields { field message } }
     ... on KeitaroFailure { message createdDomain { id name } }
+    ... on TaskKeyReused { message }
   }
 }
