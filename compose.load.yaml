@@ -1,0 +1,29 @@
+# Стек для нагрузочного сценария (R-OPS-06): вместо Keitaro — поддельный трекер.
+# Адрес и ключ трекера переопределены, настоящий ключ из .env здесь не используется.
+#
+#   docker compose -f compose.yaml -f compose.load.yaml up --build -d --wait --scale worker=2
+#   cd backend && uv run python -m scripts.load
+#   docker compose -f compose.yaml -f compose.load.yaml down -v
+x-fake: &fake
+  KEITARO_BASE_URL: http://tracker:8791
+  KEITARO_API_KEY: fake-key
+  TASK_RETRY_DELAY: "1"
+
+services:
+  backend:
+    environment: *fake
+  relay:
+    environment: *fake
+  worker:
+    environment: *fake
+
+  # Тот же образ, что у бэкенда; код подделки берётся из тестов.
+  tracker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    volumes:
+      - ./backend/tests:/srv/backend/tests:ro
+    command: ["/srv/backend/.venv/bin/uvicorn", "tests.fake_tracker:app", "--host", "0.0.0.0", "--port", "8791"]
+    ports:
+      - "127.0.0.1:${TRACKER_PORT:-8791}:8791"
