@@ -1,4 +1,5 @@
-from collections.abc import Sequence
+from collections.abc import AsyncGenerator, Sequence
+from contextlib import asynccontextmanager
 from typing import Any
 from uuid import UUID
 
@@ -8,7 +9,7 @@ from pymongo.asynchronous.database import AsyncDatabase
 
 from app.services.models import AuditEntry, Campaign, OfferLink, Published, Stream
 from app.services.shares import OfferState
-from app.storage.ports import Storage
+from app.storage.ports import Storage, UnitOfWork
 
 type Document = dict[str, Any]
 type Database = AsyncDatabase[Document]
@@ -134,10 +135,11 @@ class MongoStreams:
         cursor = self._streams.find({"campaign_id": campaign_id}).sort("position", ASCENDING)
         return [_stream(document) async for document in cursor]
 
-    async def save(self, stream: Stream) -> None:
+    async def save(self, stream: Stream) -> Stream:
         await self.save_all([stream])
+        return stream
 
-    async def save_all(self, streams: Sequence[Stream]) -> None:
+    async def save_all(self, streams: Sequence[Stream]) -> list[Stream]:
         """Write every stream in one transaction; a missing campaign aborts all of it."""
 
         async def write(session: AsyncClientSession) -> None:
@@ -155,6 +157,7 @@ class MongoStreams:
 
         async with self._client.start_session() as session:
             await session.with_transaction(write)
+        return list(streams)
 
     async def delete(self, stream_id: UUID) -> None:
         await self._streams.delete_one({"_id": stream_id})
@@ -200,10 +203,18 @@ async def prepare(database: Database) -> None:
     await database["audit_log"].create_index([("created_at", DESCENDING)])
 
 
+@asynccontextmanager
+async def _no_transaction() -> AsyncGenerator[UnitOfWork]:
+    """Units of work are not implemented yet."""
+    raise NotImplementedError
+    yield
+
+
 def create_mongo_storage(database: Database) -> Storage:
     """Persist in MongoDB: a stream is one document together with its offers (R-ST-05)."""
     return Storage(
         campaigns=MongoCampaigns(database),
         streams=MongoStreams(database),
         audit=MongoAudit(database),
+        transaction=_no_transaction,
     )

@@ -1,11 +1,24 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from uuid import UUID
+from uuid import UUID, uuid5
 
 from app.services.shares import OfferState
 
 type Scalar = str | int | bool | None
 type Details = dict[str, Scalar | list[dict[str, Scalar]]]
+
+
+_IDS = UUID("6f1c2a54-3b7e-5d21-9c40-8a2f6e1d7b03")
+
+
+def campaign_uuid(keitaro_id: int) -> UUID:
+    """Our ID of a campaign follows from the tracker's, so two loads agree (R-CC-04)."""
+    return uuid5(_IDS, f"campaign:{keitaro_id}")
+
+
+def stream_uuid(keitaro_id: int) -> UUID:
+    """Our ID of a stream follows from the tracker's, so two loads agree (R-CC-04)."""
+    return uuid5(_IDS, f"stream:{keitaro_id}")
 
 
 def _no_details() -> Details:
@@ -49,6 +62,8 @@ class Stream:
     position: int
     kind: str
     offers: tuple[OfferLink, ...] = ()
+    version: int = field(default=0, compare=False)
+    """How many times the stream was written; bookkeeping, not part of its value (R-CC-01)."""
 
     @property
     def dirty(self) -> bool:

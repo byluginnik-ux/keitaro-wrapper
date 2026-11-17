@@ -1,8 +1,9 @@
-from collections.abc import Sequence
+from collections.abc import AsyncGenerator, Sequence
+from contextlib import asynccontextmanager
 from uuid import UUID
 
 from app.services.models import AuditEntry, Campaign, Stream
-from app.storage.ports import Storage
+from app.storage.ports import Storage, UnitOfWork
 
 
 class MemoryCampaigns:
@@ -34,15 +35,17 @@ class MemoryStreams:
         found = [item for item in self.items.values() if item.campaign_id == campaign_id]
         return sorted(found, key=lambda item: item.position)
 
-    async def save(self, stream: Stream) -> None:
+    async def save(self, stream: Stream) -> Stream:
         await self.save_all([stream])
+        return stream
 
-    async def save_all(self, streams: Sequence[Stream]) -> None:
+    async def save_all(self, streams: Sequence[Stream]) -> list[Stream]:
         orphans = [item for item in streams if item.campaign_id not in self._campaigns.items]
         if orphans:
             message = f"campaign {orphans[0].campaign_id} is not stored"
             raise LookupError(message)
         self.items.update({item.id: item for item in streams})
+        return list(streams)
 
     async def delete(self, stream_id: UUID) -> None:
         self.items.pop(stream_id, None)
@@ -60,7 +63,19 @@ class MemoryAudit:
         return newest_first[:limit]
 
 
+@asynccontextmanager
+async def _no_transaction() -> AsyncGenerator[UnitOfWork]:
+    """Units of work are not implemented yet."""
+    raise NotImplementedError
+    yield
+
+
 def create_memory_storage() -> Storage:
     """Keep everything in process memory: for tests and for running without a database."""
     campaigns = MemoryCampaigns()
-    return Storage(campaigns=campaigns, streams=MemoryStreams(campaigns), audit=MemoryAudit())
+    return Storage(
+        campaigns=campaigns,
+        streams=MemoryStreams(campaigns),
+        audit=MemoryAudit(),
+        transaction=_no_transaction,
+    )

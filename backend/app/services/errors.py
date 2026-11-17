@@ -103,3 +103,12 @@ class EmptyStreamError(DomainError):
 
     def __init__(self, name: str) -> None:
         super().__init__(f"В потоке «{name}» нет активных офферов — публиковать нечего")
+
+
+class StreamConflictError(DomainError):
+    """Somebody else changed the stream first; nothing of this request was applied (R-CC-03)."""
+
+    code = "stream_conflict"
+
+    def __init__(self) -> None:
+        super().__init__("Поток изменён другим запросом — обновите его и повторите действие")

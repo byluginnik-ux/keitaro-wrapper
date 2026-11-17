@@ -1,4 +1,5 @@
-from collections.abc import Sequence
+from collections.abc import AsyncGenerator, Sequence
+from contextlib import asynccontextmanager
 from uuid import UUID
 
 from sqlalchemy import select
@@ -7,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.services.models import AuditEntry, Campaign, OfferLink, Published, Stream
 from app.services.shares import OfferState
-from app.storage.ports import Storage
+from app.storage.ports import Storage, UnitOfWork
 from app.storage.sqlalchemy.tables import AuditRow, CampaignRow, StreamOfferRow, StreamRow
 
 type Sessions = async_sessionmaker[AsyncSession]
@@ -130,10 +131,11 @@ class SqlStreams:
             )
             return [_stream(row) for row in await session.scalars(query)]
 
-    async def save(self, stream: Stream) -> None:
+    async def save(self, stream: Stream) -> Stream:
         await self.save_all([stream])
+        return stream
 
-    async def save_all(self, streams: Sequence[Stream]) -> None:
+    async def save_all(self, streams: Sequence[Stream]) -> list[Stream]:
         """Write every stream in one transaction; a missing campaign rolls all of it back."""
         try:
             async with self._sessions.begin() as session:
@@ -155,6 +157,7 @@ class SqlStreams:
         except IntegrityError as error:
             message = "a stream refers to a campaign that is not stored"
             raise LookupError(message) from error
+        return list(streams)
 
     async def delete(self, stream_id: UUID) -> None:
         async with self._sessions.begin() as session:
@@ -196,9 +199,19 @@ class SqlAudit:
             ]
 
 
+@asynccontextmanager
+async def _no_transaction() -> AsyncGenerator[UnitOfWork]:
+    """Units of work are not implemented yet."""
+    raise NotImplementedError
+    yield
+
+
 def create_sqlalchemy_storage(engine: AsyncEngine) -> Storage:
     """Persist through SQLAlchemy; the schema is owned by Alembic migrations (R-ST-02)."""
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     return Storage(
-        campaigns=SqlCampaigns(sessions), streams=SqlStreams(sessions), audit=SqlAudit(sessions)
+        campaigns=SqlCampaigns(sessions),
+        streams=SqlStreams(sessions),
+        audit=SqlAudit(sessions),
+        transaction=_no_transaction,
     )
