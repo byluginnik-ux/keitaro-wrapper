@@ -274,7 +274,8 @@ class EditorService:
         stream = await self._storage.streams.get(stream_id)
         if stream is None:
             raise StreamNotFoundError
-        del expected  # not checked yet
+        if expected is not None and stream.version != expected:
+            raise StreamConflictError(stream)
         return stream
 
     async def _save(self, stream: Stream, links: Sequence[OfferLink]) -> Stream:

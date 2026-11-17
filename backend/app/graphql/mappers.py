@@ -17,6 +17,7 @@ from app.services.errors import (
     OfferAlreadyInStreamError,
     OfferNotFoundError,
     ShareOverflowError,
+    StreamConflictError,
     StreamNotFoundError,
     ValidationError,
 )
@@ -159,6 +160,8 @@ def to_stream_refusal(error: DomainError) -> StreamRefusal:
         return to_validation_failed(error)
     if isinstance(error, KeitaroError):
         return to_keitaro_failure(error)
+    if isinstance(error, StreamConflictError) and error.current is not None:
+        return gql.StreamConflict(message=str(error), stream=to_stream(error.current))
     for kind, answer in MESSAGE_ONLY.items():
         if isinstance(error, kind):
             return answer(message=str(error))
