@@ -1,19 +1,43 @@
-from collections.abc import AsyncGenerator, Callable, Generator, Sequence
+from collections.abc import AsyncGenerator, Callable, Collection, Generator, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager, contextmanager
 from dataclasses import replace
+from datetime import datetime, timedelta
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import CursorResult, delete, insert, select, update
+from sqlalchemy import CursorResult, delete, func, insert, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from app.services.models import AuditEntry, Campaign, OfferLink, Published, Stream
+from app.services.models import (
+    AuditEntry,
+    Campaign,
+    OfferLink,
+    OutboxBacklog,
+    OutboxMessage,
+    Published,
+    Stream,
+    Task,
+    TaskKind,
+    TaskStatus,
+)
 from app.services.shares import OfferState
-from app.storage.errors import DuplicateError, MissingParentError, StaleStreamError
-from app.storage.pending import PendingOutbox, PendingTasks
+from app.storage import codec
+from app.storage.errors import (
+    DuplicateError,
+    MissingParentError,
+    StaleStreamError,
+    StaleTaskError,
+)
 from app.storage.ports import Storage, UnitOfWork
-from app.storage.sqlalchemy.tables import AuditRow, CampaignRow, StreamOfferRow, StreamRow
+from app.storage.sqlalchemy.tables import (
+    AuditRow,
+    CampaignRow,
+    OutboxRow,
+    StreamOfferRow,
+    StreamRow,
+    TaskRow,
+)
 
 type Scope = Callable[[], AbstractAsyncContextManager[AsyncSession]]
 """Where a repository gets its session: a transaction of its own or a shared one."""
@@ -245,6 +269,158 @@ class SqlAudit:
             ]
 
 
+def _task(row: TaskRow) -> Task:
+    return Task(
+        id=row.id,
+        kind=TaskKind(row.kind),
+        created_at=row.created_at,
+        fingerprint=row.fingerprint,
+        payload=row.payload,
+        status=TaskStatus(row.status),
+        attempts=row.attempts,
+        campaign_id=row.campaign_id,
+        stream_id=row.stream_id,
+        started_at=row.started_at,
+        finished_at=row.finished_at,
+        refusal=codec.refusal_from_json(row.refusal),
+        steps=codec.steps_from_json(row.steps),
+        retry_of=row.retry_of,
+    )
+
+
+def _task_values(task: Task) -> dict[str, Any]:
+    return {
+        "kind": task.kind.value,
+        "status": task.status.value,
+        "fingerprint": task.fingerprint,
+        "payload": dict(task.payload),
+        "attempts": task.attempts,
+        "campaign_id": task.campaign_id,
+        "stream_id": task.stream_id,
+        "retry_of": task.retry_of,
+        "created_at": task.created_at,
+        "started_at": task.started_at,
+        "finished_at": task.finished_at,
+        "refusal": codec.refusal_to_json(task.refusal),
+        "steps": codec.steps_to_json(task.steps),
+    }
+
+
+class SqlTasks:
+    def __init__(self, scope: Scope) -> None:
+        self._scope = scope
+
+    async def add(self, task: Task) -> None:
+        async with self._scope() as session:
+            with _integrity():
+                await session.execute(insert(TaskRow).values(id=task.id, **_task_values(task)))
+
+    async def get(self, task_id: UUID) -> Task | None:
+        async with self._scope() as session:
+            row = await session.get(TaskRow, task_id, populate_existing=True)
+            return _task(row) if row else None
+
+    async def save(self, task: Task, *, was: TaskStatus) -> None:
+        """Let exactly one of two transitions through with a conditional UPDATE (R-TK-02)."""
+        async with self._scope() as session:
+            changed = await session.execute(
+                update(TaskRow)
+                .where(TaskRow.id == task.id, TaskRow.status == was.value)
+                .values(**_task_values(task))
+            )
+            if cast("CursorResult[Any]", changed).rowcount != 1:
+                raise StaleTaskError(task.id)
+            session.expire_all()
+
+    async def list_recent(
+        self,
+        *,
+        statuses: Collection[TaskStatus] = (),
+        kind: TaskKind | None = None,
+        limit: int = 50,
+        before: datetime | None = None,
+    ) -> list[Task]:
+        query = select(TaskRow).order_by(TaskRow.created_at.desc()).limit(limit)
+        if statuses:
+            query = query.where(TaskRow.status.in_([status.value for status in statuses]))
+        if kind is not None:
+            query = query.where(TaskRow.kind == kind.value)
+        if before is not None:
+            query = query.where(TaskRow.created_at < before)
+        async with self._scope() as session:
+            rows = await session.scalars(query.execution_options(populate_existing=True))
+            return [_task(row) for row in rows]
+
+    async def count_by_status(self) -> dict[TaskStatus, int]:
+        async with self._scope() as session:
+            rows = await session.execute(
+                select(TaskRow.status, func.count()).group_by(TaskRow.status)
+            )
+            return {TaskStatus(status): count for status, count in rows}
+
+
+class SqlOutbox:
+    def __init__(self, scope: Scope) -> None:
+        self._scope = scope
+
+    async def put(self, message: OutboxMessage) -> None:
+        async with self._scope() as session:
+            await session.execute(
+                insert(OutboxRow).values(
+                    id=message.id,
+                    topic=message.topic,
+                    payload=dict(message.payload),
+                    created_at=message.created_at,
+                )
+            )
+
+    async def claim(self, *, limit: int, now: datetime, lease: timedelta) -> list[OutboxMessage]:
+        """Take free rows with SKIP LOCKED: a second sender passes over them (R-EV-02)."""
+        free = (
+            select(OutboxRow.id)
+            .where(
+                OutboxRow.sent_at.is_(None),
+                or_(OutboxRow.claimed_until.is_(None), OutboxRow.claimed_until <= now),
+            )
+            .order_by(OutboxRow.created_at, OutboxRow.id)
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
+        async with self._scope() as session:
+            taken = await session.execute(
+                update(OutboxRow)
+                .where(OutboxRow.id.in_(free))
+                .values(claimed_until=now + lease)
+                .returning(OutboxRow.id, OutboxRow.topic, OutboxRow.created_at, OutboxRow.payload)
+            )
+            messages = [
+                OutboxMessage(
+                    id=row.id, topic=row.topic, created_at=row.created_at, payload=row.payload
+                )
+                for row in taken
+            ]
+        return sorted(messages, key=lambda message: (message.created_at, message.id))
+
+    async def mark_sent(self, ids: Sequence[UUID], now: datetime) -> None:
+        if not ids:
+            return
+        async with self._scope() as session:
+            await session.execute(
+                update(OutboxRow).where(OutboxRow.id.in_(ids)).values(sent_at=now)
+            )
+
+    async def backlog(self) -> OutboxBacklog:
+        async with self._scope() as session:
+            row = (
+                await session.execute(
+                    select(func.count(), func.min(OutboxRow.created_at)).where(
+                        OutboxRow.sent_at.is_(None)
+                    )
+                )
+            ).one()
+            return OutboxBacklog(waiting=row[0], oldest=row[1])
+
+
 def create_sqlalchemy_storage(engine: AsyncEngine) -> Storage:
     """Persist through SQLAlchemy; the schema is owned by Alembic migrations (R-ST-02)."""
     sessions = async_sessionmaker(engine, expire_on_commit=False)
@@ -261,15 +437,15 @@ def create_sqlalchemy_storage(engine: AsyncEngine) -> Storage:
                 campaigns=SqlCampaigns(joined),
                 streams=SqlStreams(joined),
                 audit=SqlAudit(joined),
-                tasks=PendingTasks(),
-                outbox=PendingOutbox(),
+                tasks=SqlTasks(joined),
+                outbox=SqlOutbox(joined),
             )
 
     return Storage(
         campaigns=SqlCampaigns(sessions.begin),
         streams=SqlStreams(sessions.begin),
         audit=SqlAudit(sessions.begin),
-        tasks=PendingTasks(),
-        outbox=PendingOutbox(),
+        tasks=SqlTasks(sessions.begin),
+        outbox=SqlOutbox(sessions.begin),
         transaction=transaction,
     )

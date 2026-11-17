@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -67,3 +67,37 @@ class AuditRow(Base):
     campaign_id: Mapped[UUID | None]
     stream_id: Mapped[UUID | None]
     details: Mapped[dict[str, Any]]
+
+
+class TaskRow(Base):
+    __tablename__ = "tasks"
+    __table_args__ = (Index("ix_tasks_status_created_at", "status", "created_at"),)
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(16))
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    payload: Mapped[dict[str, Any]]
+    attempts: Mapped[int]
+    campaign_id: Mapped[UUID | None]
+    stream_id: Mapped[UUID | None]
+    retry_of: Mapped[UUID | None]
+    created_at: Mapped[datetime] = mapped_column(index=True)
+    started_at: Mapped[datetime | None]
+    finished_at: Mapped[datetime | None]
+    refusal: Mapped[dict[str, Any] | None]
+    steps: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+
+
+class OutboxRow(Base):
+    __tablename__ = "outbox"
+    __table_args__ = (
+        Index("ix_outbox_unsent", "created_at", postgresql_where=text("sent_at IS NULL")),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    topic: Mapped[str] = mapped_column(String(64))
+    payload: Mapped[dict[str, Any]]
+    created_at: Mapped[datetime]
+    claimed_until: Mapped[datetime | None]
+    sent_at: Mapped[datetime | None]

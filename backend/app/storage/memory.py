@@ -1,12 +1,27 @@
 import asyncio
-from collections.abc import AsyncGenerator, Sequence
+from collections import Counter
+from collections.abc import AsyncGenerator, Collection, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import replace
+from datetime import datetime, timedelta
 from uuid import UUID
 
-from app.services.models import AuditEntry, Campaign, Stream
-from app.storage.errors import DuplicateError, MissingParentError, StaleStreamError
-from app.storage.pending import PendingOutbox, PendingTasks
+from app.services.models import (
+    AuditEntry,
+    Campaign,
+    OutboxBacklog,
+    OutboxMessage,
+    Stream,
+    Task,
+    TaskKind,
+    TaskStatus,
+)
+from app.storage.errors import (
+    DuplicateError,
+    MissingParentError,
+    StaleStreamError,
+    StaleTaskError,
+)
 from app.storage.ports import Storage, UnitOfWork
 
 
@@ -83,35 +98,106 @@ class MemoryAudit:
         return newest_first[:limit]
 
 
+class MemoryTasks:
+    def __init__(self) -> None:
+        self.items: dict[UUID, Task] = {}
+
+    async def add(self, task: Task) -> None:
+        if task.id in self.items:
+            message = f"task {task.id} is already stored"
+            raise DuplicateError(message)
+        self.items[task.id] = task
+
+    async def get(self, task_id: UUID) -> Task | None:
+        return self.items.get(task_id)
+
+    async def save(self, task: Task, *, was: TaskStatus) -> None:
+        stored = self.items.get(task.id)
+        if stored is None or stored.status is not was:
+            raise StaleTaskError(task.id)
+        self.items[task.id] = task
+
+    async def list_recent(
+        self,
+        *,
+        statuses: Collection[TaskStatus] = (),
+        kind: TaskKind | None = None,
+        limit: int = 50,
+        before: datetime | None = None,
+    ) -> list[Task]:
+        found = [
+            task
+            for task in self.items.values()
+            if (not statuses or task.status in statuses)
+            and (kind is None or task.kind is kind)
+            and (before is None or task.created_at < before)
+        ]
+        return sorted(found, key=lambda task: task.created_at, reverse=True)[:limit]
+
+    async def count_by_status(self) -> dict[TaskStatus, int]:
+        return dict(Counter(task.status for task in self.items.values()))
+
+
+class MemoryOutbox:
+    def __init__(self) -> None:
+        self.waiting: dict[UUID, OutboxMessage] = {}
+        self.claimed: dict[UUID, datetime] = {}
+
+    async def put(self, message: OutboxMessage) -> None:
+        self.waiting[message.id] = message
+
+    async def claim(self, *, limit: int, now: datetime, lease: timedelta) -> list[OutboxMessage]:
+        free = [
+            message for message in self.waiting.values() if self.claimed.get(message.id, now) <= now
+        ]
+        taken = sorted(free, key=lambda message: message.created_at)[:limit]
+        self.claimed.update({message.id: now + lease for message in taken})
+        return taken
+
+    async def mark_sent(self, ids: Sequence[UUID], now: datetime) -> None:
+        del now
+        for message_id in ids:
+            self.waiting.pop(message_id, None)
+            self.claimed.pop(message_id, None)
+
+    async def backlog(self) -> OutboxBacklog:
+        oldest = min((message.created_at for message in self.waiting.values()), default=None)
+        return OutboxBacklog(len(self.waiting), oldest)
+
+
 def create_memory_storage() -> Storage:
     """Keep everything in process memory: for tests and for running without a database."""
     campaigns = MemoryCampaigns()
     streams = MemoryStreams(campaigns)
     audit = MemoryAudit()
+    tasks = MemoryTasks()
+    outbox = MemoryOutbox()
     turn = asyncio.Lock()
 
     @asynccontextmanager
     async def transaction() -> AsyncGenerator[UnitOfWork]:
         """One unit of work at a time; a failure puts everything back."""
         async with turn:
-            before = (dict(campaigns.items), dict(streams.items), list(audit.entries))
+            before = (
+                dict(campaigns.items),
+                dict(streams.items),
+                list(audit.entries),
+                dict(tasks.items),
+                dict(outbox.waiting),
+            )
             try:
                 yield UnitOfWork(
-                    campaigns=campaigns,
-                    streams=streams,
-                    audit=audit,
-                    tasks=PendingTasks(),
-                    outbox=PendingOutbox(),
+                    campaigns=campaigns, streams=streams, audit=audit, tasks=tasks, outbox=outbox
                 )
             except BaseException:
-                campaigns.items, streams.items, audit.entries = before
+                campaigns.items, streams.items, audit.entries, tasks.items, outbox.waiting = before
                 raise
 
     return Storage(
         campaigns=campaigns,
         streams=streams,
         audit=audit,
-        tasks=PendingTasks(),
-        outbox=PendingOutbox(),
+        tasks=tasks,
+        outbox=outbox,
         transaction=transaction,
     )

@@ -1,23 +1,36 @@
-from collections.abc import AsyncGenerator, Generator, Sequence
+from collections.abc import AsyncGenerator, Collection, Generator, Sequence
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import replace
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from pymongo import ASCENDING, DESCENDING
+from pymongo import ASCENDING, DESCENDING, ReturnDocument
 from pymongo.asynchronous.client_session import AsyncClientSession
 from pymongo.asynchronous.database import AsyncDatabase
 from pymongo.errors import DuplicateKeyError, OperationFailure
 
-from app.services.models import AuditEntry, Campaign, OfferLink, Published, Stream
+from app.services.models import (
+    AuditEntry,
+    Campaign,
+    OfferLink,
+    OutboxBacklog,
+    OutboxMessage,
+    Published,
+    Stream,
+    Task,
+    TaskKind,
+    TaskStatus,
+)
 from app.services.shares import OfferState
+from app.storage import codec
 from app.storage.errors import (
     DuplicateError,
     MissingParentError,
     StaleStreamError,
+    StaleTaskError,
     StorageConflictError,
 )
-from app.storage.pending import PendingOutbox, PendingTasks
 from app.storage.ports import Storage, UnitOfWork
 
 type Document = dict[str, Any]
@@ -245,6 +258,155 @@ class MongoAudit:
         ]
 
 
+def _task(document: Document) -> Task:
+    return Task(
+        id=document["_id"],
+        kind=TaskKind(document["kind"]),
+        created_at=document["created_at"],
+        fingerprint=document["fingerprint"],
+        payload=document["payload"],
+        status=TaskStatus(document["status"]),
+        attempts=document["attempts"],
+        campaign_id=document["campaign_id"],
+        stream_id=document["stream_id"],
+        started_at=document["started_at"],
+        finished_at=document["finished_at"],
+        refusal=codec.refusal_from_json(document["refusal"]),
+        steps=codec.steps_from_json(document["steps"]),
+        retry_of=document["retry_of"],
+    )
+
+
+def _task_document(task: Task) -> Document:
+    return {
+        "_id": task.id,
+        "kind": task.kind.value,
+        "status": task.status.value,
+        "fingerprint": task.fingerprint,
+        "payload": dict(task.payload),
+        "attempts": task.attempts,
+        "campaign_id": task.campaign_id,
+        "stream_id": task.stream_id,
+        "retry_of": task.retry_of,
+        "created_at": task.created_at,
+        "started_at": task.started_at,
+        "finished_at": task.finished_at,
+        "refusal": codec.refusal_to_json(task.refusal),
+        "steps": codec.steps_to_json(task.steps),
+    }
+
+
+class MongoTasks:
+    def __init__(self, database: Database, session: Session = None) -> None:
+        self._tasks = database["tasks"]
+        self._session = session
+
+    async def add(self, task: Task) -> None:
+        with _conflicts():
+            await self._tasks.insert_one(_task_document(task), session=self._session)
+
+    async def get(self, task_id: UUID) -> Task | None:
+        document = await self._tasks.find_one({"_id": task_id}, session=self._session)
+        return _task(document) if document else None
+
+    async def save(self, task: Task, *, was: TaskStatus) -> None:
+        with _conflicts():
+            replaced = await self._tasks.replace_one(
+                {"_id": task.id, "status": was.value}, _task_document(task), session=self._session
+            )
+        if replaced.matched_count != 1:
+            raise StaleTaskError(task.id)
+
+    async def list_recent(
+        self,
+        *,
+        statuses: Collection[TaskStatus] = (),
+        kind: TaskKind | None = None,
+        limit: int = 50,
+        before: datetime | None = None,
+    ) -> list[Task]:
+        query: Document = {}
+        if statuses:
+            query["status"] = {"$in": [status.value for status in statuses]}
+        if kind is not None:
+            query["kind"] = kind.value
+        if before is not None:
+            query["created_at"] = {"$lt": before}
+        cursor = (
+            self._tasks.find(query, session=self._session)
+            .sort("created_at", DESCENDING)
+            .limit(limit)
+        )
+        return [_task(document) async for document in cursor]
+
+    async def count_by_status(self) -> dict[TaskStatus, int]:
+        groups = await self._tasks.aggregate(
+            [{"$group": {"_id": "$status", "count": {"$sum": 1}}}], session=self._session
+        )
+        return {TaskStatus(group["_id"]): group["count"] async for group in groups}
+
+
+class MongoOutbox:
+    def __init__(self, database: Database, session: Session = None) -> None:
+        self._outbox = database["outbox"]
+        self._session = session
+
+    async def put(self, message: OutboxMessage) -> None:
+        await self._outbox.insert_one(
+            {
+                "_id": message.id,
+                "topic": message.topic,
+                "payload": dict(message.payload),
+                "created_at": message.created_at,
+                "claimed_until": None,
+                "sent_at": None,
+            },
+            session=self._session,
+        )
+
+    async def claim(self, *, limit: int, now: datetime, lease: timedelta) -> list[OutboxMessage]:
+        """Take messages one by one (R-EV-02).
+
+        Each find-and-update is atomic, so no two senders get the same message.
+        """
+        free = {
+            "sent_at": None,
+            "$or": [{"claimed_until": None}, {"claimed_until": {"$lte": now}}],
+        }
+        taken: list[OutboxMessage] = []
+        while len(taken) < limit:
+            document = await self._outbox.find_one_and_update(
+                free,
+                {"$set": {"claimed_until": now + lease}},
+                sort=[("created_at", ASCENDING), ("_id", ASCENDING)],
+                return_document=ReturnDocument.AFTER,
+                session=self._session,
+            )
+            if document is None:
+                break
+            taken.append(
+                OutboxMessage(
+                    id=document["_id"],
+                    topic=document["topic"],
+                    created_at=document["created_at"],
+                    payload=document["payload"],
+                )
+            )
+        return taken
+
+    async def mark_sent(self, ids: Sequence[UUID], now: datetime) -> None:
+        await self._outbox.update_many(
+            {"_id": {"$in": list(ids)}}, {"$set": {"sent_at": now}}, session=self._session
+        )
+
+    async def backlog(self) -> OutboxBacklog:
+        waiting = await self._outbox.count_documents({"sent_at": None}, session=self._session)
+        oldest = await self._outbox.find_one(
+            {"sent_at": None}, sort=[("created_at", ASCENDING)], session=self._session
+        )
+        return OutboxBacklog(waiting, oldest["created_at"] if oldest else None)
+
+
 async def prepare(database: Database) -> None:
     """Create the indexes the adapter relies on; safe to repeat."""
     await database["campaigns"].create_index("keitaro_id", unique=True)
@@ -252,6 +414,9 @@ async def prepare(database: Database) -> None:
     await database["streams"].create_index("keitaro_id", unique=True)
     await database["streams"].create_index([("campaign_id", ASCENDING), ("position", ASCENDING)])
     await database["audit_log"].create_index([("created_at", DESCENDING)])
+    await database["tasks"].create_index([("status", ASCENDING), ("created_at", DESCENDING)])
+    await database["tasks"].create_index([("created_at", DESCENDING)])
+    await database["outbox"].create_index([("sent_at", ASCENDING), ("created_at", ASCENDING)])
 
 
 def create_mongo_storage(database: Database) -> Storage:
@@ -267,15 +432,15 @@ def create_mongo_storage(database: Database) -> Storage:
                         campaigns=MongoCampaigns(database, session),
                         streams=MongoStreams(database, session),
                         audit=MongoAudit(database, session),
-                        tasks=PendingTasks(),
-                        outbox=PendingOutbox(),
+                        tasks=MongoTasks(database, session),
+                        outbox=MongoOutbox(database, session),
                     )
 
     return Storage(
         campaigns=MongoCampaigns(database),
         streams=MongoStreams(database),
         audit=MongoAudit(database),
-        tasks=PendingTasks(),
-        outbox=PendingOutbox(),
+        tasks=MongoTasks(database),
+        outbox=MongoOutbox(database),
         transaction=transaction,
     )

@@ -21,6 +21,14 @@ description: Хранилище бэкенда — интерфейсы в stora
 - Отказы (`storage/errors.py`): `StaleStreamError` — поток изменён после чтения; `DuplicateError` — запись с таким ID или ID Keitaro уже есть; обе — `StorageConflictError`, сервис превращает их в предметный отказ или перечитывает и повторяет. `MissingParentError` — нет кампании потока.
 - Безусловной записи потока нет и добавлять её нельзя: она возвращает потерю правок.
 
+## Задачи и outbox
+
+- `tasks.add(task)` — новая задача; известный ID — `DuplicateError`: ID выдаёт клиент, это ключ идемпотентности (R-TK-03).
+- `tasks.save(task, was=статус)` — переход, только если задача сейчас в статусе `was`; иначе `StaleTaskError` (R-TK-02). Так обработчик и отмена не выполняют одну задачу дважды.
+- `outbox.put(message)` вызывается только внутри `storage.transaction()` вместе с изменением данных (R-EV-01).
+- `outbox.claim(limit, now, lease)` берёт самые старые неотправленные сообщения в аренду; `mark_sent` закрывает их. Postgres — `FOR UPDATE SKIP LOCKED`, Mongo — `find_one_and_update` по одному (R-EV-02).
+- Части задачи, которые обе базы хранят как JSON (отказ, шаги), кодирует `storage/codec.py`.
+
 ## Правило трёх адаптеров
 
 Любое изменение интерфейса делается одним заходом в `ports.py`, `memory.py`, `sqlalchemy/`, `mongo/` и покрывается контрактным тестом в `tests/storage/test_contract.py`, который идёт на всех адаптерах (фикстура `storage`). Гонки сервисов поверх хранилища — `tests/storage/test_concurrent_edits.py`. Поведение, не описанное контрактным тестом, считается неопределённым.
