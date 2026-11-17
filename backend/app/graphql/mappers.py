@@ -11,7 +11,6 @@ from app.services import countries, models
 from app.services.creator import NewCampaignRequest
 from app.services.editor import FetchedStreams
 from app.services.errors import (
-    CampaignCreationError,
     DomainError,
     EmptyStreamError,
     KeitaroError,
@@ -79,10 +78,7 @@ def to_validation_failed(error: ValidationError) -> gql.ValidationFailed:
 
 
 def to_keitaro_failure(error: KeitaroError) -> gql.KeitaroFailure:
-    created = error.created_domain if isinstance(error, CampaignCreationError) else None
-    return gql.KeitaroFailure(
-        message=str(error), created_domain=to_domain(created) if created else None
-    )
+    return gql.KeitaroFailure(message=str(error), created_domain=None)
 
 
 def to_offer_state(state: OfferState) -> gql.OfferState:

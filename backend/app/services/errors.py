@@ -1,7 +1,5 @@
 from typing import TYPE_CHECKING
 
-from app.keitaro.models import Domain
-
 if TYPE_CHECKING:
     from app.services.models import Stream
 
@@ -44,16 +42,6 @@ class ValidationError(DomainError):
     def __init__(self, fields: dict[str, str]) -> None:
         super().__init__("Проверьте поля: " + ", ".join(fields))
         self.fields = fields
-
-
-class CampaignCreationError(KeitaroError):
-    """The tracker failed while a campaign was being assembled (R-CR-07, R-CR-12)."""
-
-    def __init__(
-        self, message: str, status: int | None = None, created_domain: Domain | None = None
-    ) -> None:
-        super().__init__(message, status)
-        self.created_domain = created_domain
 
 
 class CampaignNotFoundError(DomainError):

@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from pydantic import TypeAdapter, ValidationError
@@ -62,6 +62,18 @@ class KeitaroClient:
 
     async def create_campaign(self, campaign: NewCampaign) -> Campaign:
         return _parse(Campaign, await self._write("POST", "/campaigns", campaign.model_dump()))
+
+    async def find_campaign_by_alias(self, alias: str) -> Campaign | None:
+        """Look a campaign up by the unique part of its address; other campaigns are not parsed."""
+        listed: Any = await self._read("/campaigns")
+        if not isinstance(listed, list):
+            message = "Keitaro вернул список кампаний в неожиданном виде"
+            raise KeitaroError(message)
+        for item in cast("list[Any]", listed):
+            campaign = cast("dict[str, Any]", item) if isinstance(item, dict) else {}
+            if campaign.get("alias") == alias:
+                return _parse(Campaign, campaign)
+        return None
 
     async def delete_campaign(self, campaign_id: int) -> None:
         await self._write("DELETE", f"/campaigns/{campaign_id}")

@@ -177,6 +177,24 @@ async def test_campaign_is_read_by_id(tracker: respx.MockRouter, keitaro: Keitar
     assert campaign.traffic_source_id == 836
 
 
+async def test_campaign_is_found_by_alias_among_campaigns_of_any_shape(
+    tracker: respx.MockRouter, keitaro: KeitaroClient
+) -> None:
+    """R-CR-14: campaigns of other people are not parsed, only compared."""
+    listed = [
+        {"id": 1, "alias": None, "name": None},
+        {"id": 93212, "name": "test_bulygin_au", "alias": "alias001", "domain_id": 1813},
+    ]
+    tracker.get("/campaigns").respond(json=listed)
+
+    found = await keitaro.find_campaign_by_alias("alias001")
+    missing = await keitaro.find_campaign_by_alias("nobody")
+
+    assert found is not None
+    assert (found.id, found.name, found.domain_id) == (93212, "test_bulygin_au", 1813)
+    assert missing is None
+
+
 async def test_campaign_is_deleted(tracker: respx.MockRouter, keitaro: KeitaroClient) -> None:
     """R-CR-07."""
     route = tracker.delete("/campaigns/93212").respond(json=fixture_json("campaign.json"))

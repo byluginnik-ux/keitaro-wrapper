@@ -73,6 +73,7 @@ class FakeKeitaro:
         self._enter("create_domain")
         domain = Domain(id=self._new_id(), name=name)
         self.domains.append(domain)
+        self._leave("create_domain")
         return domain
 
     async def list_groups(self) -> list[Group]:
@@ -98,7 +99,12 @@ class FakeKeitaro:
         self._enter("create_campaign")
         created = Campaign(id=self._new_id(), **campaign.model_dump(exclude={"type"}))
         self.campaigns[created.id] = created
+        self._leave("create_campaign")
         return created
+
+    async def find_campaign_by_alias(self, alias: str) -> Campaign | None:
+        self._enter("find_campaign_by_alias")
+        return next((item for item in self.campaigns.values() if item.alias == alias), None)
 
     async def delete_campaign(self, campaign_id: int) -> None:
         self._enter("delete_campaign")
@@ -120,6 +126,7 @@ class FakeKeitaro:
             offers=stream.offers,
         )
         self.streams[created.id] = created
+        self._leave("create_stream")
         return created
 
     async def list_campaign_streams(self, campaign_id: int) -> list[Stream]:

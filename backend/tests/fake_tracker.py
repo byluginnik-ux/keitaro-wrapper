@@ -85,6 +85,11 @@ async def offers() -> list[Offer]:
     return await keitaro.list_offers()
 
 
+@app.get(f"{api}/campaigns")
+async def campaigns() -> list[Campaign]:
+    return list(keitaro.campaigns.values())
+
+
 @app.get(f"{api}/campaigns/{{campaign_id}}")
 async def campaign(campaign_id: int) -> Campaign:
     return await keitaro.get_campaign(campaign_id)

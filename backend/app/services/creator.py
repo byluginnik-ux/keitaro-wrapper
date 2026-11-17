@@ -3,28 +3,26 @@ import re
 import secrets
 import string
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from app.keitaro import models as tracker
 from app.keitaro.gateway import KeitaroGateway
 from app.messaging.ports import Message
 from app.services.catalog import CatalogService
 from app.services.countries import find_country
-from app.services.errors import CampaignCreationError, KeitaroError, ValidationError
+from app.services.errors import ValidationError
 from app.services.models import (
-    AuditEntry,
-    Campaign,
-    Details,
-    OfferLink,
-    Published,
-    Stream,
     Task,
-    campaign_uuid,
-    stream_uuid,
 )
 from app.storage.ports import Storage
+
+CREATE_REQUESTED = "campaign.create.requested"
+CREATED = "campaign.created"
+CREATE_REJECTED = "campaign.create.rejected"
+
+SERVER_ERROR = 500
 
 ALIAS_ALPHABET = string.ascii_lowercase + string.digits
 ALIAS_LENGTH = 8
@@ -74,10 +72,11 @@ class _Progress:
 
     step: str = "домен"
     created_domain: tracker.Domain | None = None
+    campaign_id: int | None = None
     left_behind: int | None = None
     rolled_back: bool | None = None
 
-    def describe(self, error: KeitaroError) -> str:
+    def describe(self, error: object) -> str:
         parts = [f"Keitaro не создал {self.step}: {error}."]
         if self.rolled_back:
             parts.append("Кампания удалена.")
@@ -103,8 +102,20 @@ def _domain_remark(
     return {}
 
 
+@dataclass(slots=True)
+class _Run:
+    """One delivery of a creation task: the task as it is stored now and how far it went."""
+
+    task: Task
+    progress: _Progress = field(default_factory=_Progress)
+
+
+def _nothing() -> None:
+    return None
+
+
 class CreatorService:
-    """Assemble a campaign with its two streams in the tracker and remember it (R-CR-01…12)."""
+    """Assemble a campaign with its two streams as a task and remember it (R-CR-01…15)."""
 
     def __init__(  # noqa: PLR0913 — collaborators are passed explicitly, there is no container
         self,
@@ -115,6 +126,8 @@ class CreatorService:
         name_prefix: str,
         clock: Callable[[], datetime] = utc_now,
         new_alias: Callable[[], str] = random_alias,
+        max_attempts: int = 3,
+        announce: Callable[[], None] = _nothing,
     ) -> None:
         self._keitaro = keitaro
         self._catalog = catalog
@@ -122,54 +135,23 @@ class CreatorService:
         self._name_prefix = name_prefix
         self._clock = clock
         self._new_alias = new_alias
+        self._max_attempts = max_attempts
+        self._announce = announce
 
     async def request(self, request: NewCampaignRequest, task_id: UUID) -> Task:
-        """Check the form and queue the creation (R-CR-13)."""
+        """Check the form and queue the creation; nothing is written to the tracker (R-CR-13)."""
         raise NotImplementedError
 
     async def handle(self, message: Message) -> None:
-        """Carry out a queued creation (R-CR-14, 15)."""
+        """Carry out a queued creation; a repeat goes on from what is done (R-CR-14).
+
+        Raising asks the bus to deliver the message again later (R-CR-15).
+        """
         raise NotImplementedError
 
     async def bury(self, message: Message) -> None:
         """Close the task of a message nobody managed to handle (R-CR-15)."""
         raise NotImplementedError
-
-    async def create(self, request: NewCampaignRequest) -> Campaign:
-        """Create the campaign or leave the tracker as it was (R-CR-07)."""
-        plan = await self._check(request)
-        progress = _Progress()
-        try:
-            campaign = await self._assemble(plan, progress)
-        except KeitaroError as error:
-            failure = CampaignCreationError(
-                progress.describe(error), error.status, progress.created_domain
-            )
-            await self._record(
-                "campaign.create_failed",
-                None,
-                {
-                    "name": plan.name,
-                    "error": str(failure),
-                    "rolled_back": progress.rolled_back,
-                    "keitaro_id": progress.left_behind,
-                    "domain_created": progress.created_domain is not None,
-                },
-            )
-            raise failure from error
-        await self._record(
-            "campaign.created",
-            campaign,
-            {
-                "keitaro_id": campaign.keitaro_id,
-                "name": campaign.name,
-                "country": campaign.country,
-                "offer_id": plan.offer.id,
-                "domain_id": campaign.domain_id,
-                "domain_created": progress.created_domain is not None,
-            },
-        )
-        return campaign
 
     async def _check(self, request: NewCampaignRequest) -> _Plan:
         """Collect every remark at once, so the form is fixed in one pass (R-CR-01…03, 11)."""
@@ -208,106 +190,4 @@ class CreatorService:
             traffic_source_id=request.traffic_source_id,
             domain=domain,
             new_host=host,
-        )
-
-    async def _assemble(self, plan: _Plan, progress: _Progress) -> Campaign:
-        domain = plan.domain
-        if domain is None:
-            domain = progress.created_domain = await self._keitaro.create_domain(plan.new_host)
-        progress.step = "кампанию"
-        created = await self._keitaro.create_campaign(
-            tracker.NewCampaign(
-                name=plan.name,
-                alias=self._new_alias(),
-                domain_id=domain.id,
-                group_id=plan.group_id,
-                traffic_source_id=plan.traffic_source_id,
-            )
-        )
-        progress.step = "поток"
-        try:
-            return await self._add_streams(plan, created)
-        except Exception:
-            progress.rolled_back = await self._remove(created.id)
-            progress.left_behind = None if progress.rolled_back else created.id
-            raise
-
-    async def _add_streams(self, plan: _Plan, created: tracker.Campaign) -> Campaign:
-        """Create both streams, then store everything (R-CR-05, 06, 08)."""
-        country_filter = tracker.StreamFilter(
-            name="country", mode="accept", payload=(plan.country,)
-        )
-        first = await self._keitaro.create_stream(
-            tracker.NewStream(
-                campaign_id=created.id,
-                name="Flow 1",
-                position=1,
-                kind="redirect",
-                action_payload=REDIRECT_TARGET,
-                filters=(country_filter,),
-            )
-        )
-        second = await self._keitaro.create_stream(
-            tracker.NewStream(
-                campaign_id=created.id,
-                name="Flow 2",
-                position=2,
-                kind="landings",
-                offers=(tracker.StreamOffer(offer_id=plan.offer.id, share=100),),
-            )
-        )
-        campaign = Campaign(
-            id=campaign_uuid(created.id),
-            keitaro_id=created.id,
-            name=created.name,
-            alias=created.alias,
-            created_at=self._clock(),
-            country=plan.country,
-            domain_id=created.domain_id,
-            group_id=created.group_id,
-            traffic_source_id=created.traffic_source_id,
-        )
-        offer = OfferLink(plan.offer.id, plan.offer.name, 100, published=Published(100))
-        async with self._storage.transaction() as work:
-            await work.campaigns.add(campaign)
-            await work.streams.save_all(
-                [
-                    Stream(
-                        stream_uuid(first.id),
-                        campaign.id,
-                        first.id,
-                        first.name,
-                        first.position,
-                        first.kind,
-                    ),
-                    Stream(
-                        stream_uuid(second.id),
-                        campaign.id,
-                        second.id,
-                        second.name,
-                        second.position,
-                        second.kind,
-                        (offer,),
-                    ),
-                ]
-            )
-        return campaign
-
-    async def _remove(self, keitaro_id: int) -> bool:
-        try:
-            await self._keitaro.delete_campaign(keitaro_id)
-        except KeitaroError:
-            return False
-        return True
-
-    async def _record(self, action: str, campaign: Campaign | None, details: Details) -> None:
-        """Write one line of the journal (R-CR-09)."""
-        await self._storage.audit.record(
-            AuditEntry(
-                id=uuid4(),
-                action=action,
-                created_at=self._clock(),
-                campaign_id=campaign.id if campaign else None,
-                details=details,
-            )
         )

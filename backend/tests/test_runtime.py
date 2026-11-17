@@ -7,6 +7,7 @@ from pydantic import SecretStr
 
 from app.messaging.memory import MemoryBus
 from app.runtime import QUEUES, Runtime, assemble
+from app.services.creator import NewCampaignRequest
 from app.services.models import TaskStatus
 from app.settings import Settings
 from app.storage.memory import create_memory_storage
@@ -72,3 +73,39 @@ async def test_tracker_that_stays_down_ends_the_task_after_the_last_attempt(
     assert outcome == (TaskStatus.REJECTED, MAX_ATTEMPTS)
     assert keitaro.calls["replace_stream_offers"] == MAX_ATTEMPTS
     assert [offer.share for offer in keitaro.streams[OFFERS_STREAM_ID].offers] == [34, 33, 33]
+
+
+async def test_queued_creation_makes_one_campaign_despite_a_lost_answer(
+    runtime: Runtime, keitaro: FakeKeitaro
+) -> None:
+    """R-CR-14, R-CR-15: the bus delivers the message again, the campaign is still one."""
+    request = NewCampaignRequest(
+        name="test_bulygin_runtime",
+        country="AU",
+        offer_id=D,
+        group_id=10332,
+        traffic_source_id=836,
+        new_domain_name="new.example.com",
+    )
+    before = len(keitaro.campaigns)
+
+    class Once(set[str]):
+        """Lose the answer of the first call only."""
+
+        def __contains__(self, method: object) -> bool:
+            found = super().__contains__(method)
+            self.discard(str(method))
+            return found
+
+    keitaro.lose_answer = Once({"create_campaign"})
+
+    task = await runtime.creator.request(request, uuid4())
+    await settle(runtime)
+    done = await runtime.publisher.task(task.id)
+    assert isinstance(runtime.bus, MemoryBus)
+    await runtime.bus.close()
+
+    assert done is not None
+    assert (done.status, done.attempts) == (TaskStatus.SUCCEEDED, 2)
+    assert len(keitaro.campaigns) == before + 1
+    assert keitaro.calls["create_campaign"] == 1

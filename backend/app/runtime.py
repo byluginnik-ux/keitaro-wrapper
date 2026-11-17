@@ -8,11 +8,11 @@ from dataclasses import dataclass
 from app.keitaro.client import KeitaroClient, create_http_client
 from app.keitaro.gateway import KeitaroGateway
 from app.messaging.memory import MemoryBus
-from app.messaging.ports import MessageBus, Queue
+from app.messaging.ports import Message, MessageBus, Queue
 from app.messaging.rabbitmq import open_rabbit_bus
 from app.messaging.relay import Relay
 from app.services.catalog import CatalogService
-from app.services.creator import CreatorService
+from app.services.creator import CREATE_REQUESTED, CreatorService
 from app.services.editor import EditorService
 from app.services.publisher import PUBLISH_REQUESTED, PublisherService
 from app.services.tasks import TasksService
@@ -20,7 +20,7 @@ from app.settings import Settings
 from app.storage.factory import open_storage
 from app.storage.ports import Storage
 
-TASKS = Queue("keitaro.tasks", (PUBLISH_REQUESTED,))
+TASKS = Queue("keitaro.tasks", (PUBLISH_REQUESTED, CREATE_REQUESTED))
 QUEUES = (TASKS,)
 
 
@@ -37,8 +37,17 @@ class Runtime:
 
     async def consume_tasks(self) -> None:
         """Start doing the queued work in this process."""
-        await self.bus.consume(TASKS.name, self.publisher.handle)
-        await self.bus.consume(TASKS.dead, self.publisher.bury)
+        await self.bus.consume(TASKS.name, self._handle)
+        await self.bus.consume(TASKS.dead, self._bury)
+
+    async def _handle(self, message: Message) -> None:
+        """Give the message to the service its topic belongs to."""
+        service = self.creator if message.topic == CREATE_REQUESTED else self.publisher
+        await service.handle(message)
+
+    async def _bury(self, message: Message) -> None:
+        service = self.creator if message.topic == CREATE_REQUESTED else self.publisher
+        await service.bury(message)
 
 
 @asynccontextmanager
@@ -77,7 +86,12 @@ def assemble(
         relay=relay,
         catalog=catalog,
         creator=CreatorService(
-            keitaro, catalog, storage, name_prefix=settings.campaign_name_prefix
+            keitaro,
+            catalog,
+            storage,
+            name_prefix=settings.campaign_name_prefix,
+            max_attempts=settings.task_max_attempts,
+            announce=relay.nudge,
         ),
         editor=EditorService(keitaro, catalog, storage),
         publisher=publisher,
