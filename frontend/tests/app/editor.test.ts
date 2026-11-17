@@ -329,6 +329,19 @@ describe('following a task (R-UX-18)', () => {
     expect(asked).toEqual(['task-1', 'task-1', 'task-1', 'task-1'])
   })
 
+  it('tells about every answer on the way (R-UX-06)', async () => {
+    const answers = [state('pending', false), state('running', false), state('succeeded', true)]
+    const seen: string[] = []
+
+    await followTask('task-1', {
+      load: async () => answers.shift() as TaskView,
+      wait,
+      onUpdate: task => seen.push(task.status),
+    })
+
+    expect(seen).toEqual(['pending', 'running', 'succeeded'])
+  })
+
   it('gives up when patience runs out', async () => {
     let asked = 0
     const load = async () => {

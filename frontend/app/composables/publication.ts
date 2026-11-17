@@ -8,6 +8,8 @@ export interface FollowOptions {
   /** How long to keep asking, ms. */
   patience?: number
   wait?: (ms: number) => Promise<void>
+  /** Hear about every answer, to show how far the task went. */
+  onUpdate?: (task: TaskView) => void
 }
 
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))

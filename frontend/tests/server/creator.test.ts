@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { createCampaign, loadCreatorOptions, searchOffers } from '../../server/utils/creator'
-import { CAMPAIGN, fakeBackend, refusal } from './support'
+import { TASK_ID, fakeBackend, refusal, task } from './support'
 
 const INPUT = {
+  taskId: TASK_ID,
   name: 'test_bulygin_au',
   country: 'AU',
   offerId: 11111,
@@ -57,26 +58,18 @@ describe('offer search', () => {
 })
 
 describe('create campaign', () => {
-  it('returns the campaign with a link into the tracker (R-UX-04)', async () => {
-    const { graphql, calls } = fakeBackend({
-      CreateCampaign: { createCampaign: { __typename: 'Campaign', ...CAMPAIGN } },
-      TrackerUrl: { serviceInfo: INFO },
-    })
+  it('queues a task under the ID the browser made and answers with it (R-CR-13)', async () => {
+    const queued = task({ kind: 'CREATE_CAMPAIGN', campaignId: null, streamId: null })
+    const { graphql, calls } = fakeBackend({ CreateCampaign: { createCampaign: queued } })
 
-    const campaign = await createCampaign(graphql, INPUT)
+    const view = await createCampaign(graphql, INPUT)
 
-    expect(campaign).toEqual({
-      ...CAMPAIGN,
-      trackerLink: 'https://tracker.test/admin/#!/campaigns/93212',
-    })
-    expect(calls[0]).toEqual({ operation: 'CreateCampaign', variables: { input: INPUT } })
+    expect(calls).toEqual([{ operation: 'CreateCampaign', variables: { input: INPUT } }])
+    expect(view).toMatchObject({ id: TASK_ID, kind: 'create_campaign', status: 'pending', finished: false, campaignId: null })
   })
 
   it('sends a new domain name instead of an existing domain (R-CR-10)', async () => {
-    const { graphql, calls } = fakeBackend({
-      CreateCampaign: { createCampaign: { __typename: 'Campaign', ...CAMPAIGN } },
-      TrackerUrl: { serviceInfo: INFO },
-    })
+    const { graphql, calls } = fakeBackend({ CreateCampaign: { createCampaign: task() } })
     const { domainId: _omitted, ...rest } = INPUT
 
     await createCampaign(graphql, { ...rest, newDomainName: 'new.example.com' })
@@ -84,14 +77,17 @@ describe('create campaign', () => {
     expect(calls[0]?.variables).toEqual({ input: { ...rest, newDomainName: 'new.example.com' } })
   })
 
-  it('rejects malformed input before the backend is asked', async () => {
+  it.each([
+    [{ ...INPUT, offerId: 'x', name: '' }, ['name', 'offerId']],
+    [{ ...INPUT, taskId: 'not-a-uuid' }, ['taskId']],
+  ])('rejects malformed input before the backend is asked', async (input, fields) => {
     const { graphql, calls } = fakeBackend({})
 
-    const { status, body } = await refusal(createCampaign(graphql, { ...INPUT, offerId: 'x', name: '' }))
+    const { status, body } = await refusal(createCampaign(graphql, input))
 
     expect(status).toBe(400)
     expect(body.code).toBe('invalid_input')
-    expect(body.fields?.map(item => item.field).sort()).toEqual(['name', 'offerId'])
+    expect(body.fields?.map(item => item.field).sort()).toEqual(fields)
     expect(calls).toHaveLength(0)
   })
 
@@ -107,21 +103,14 @@ describe('create campaign', () => {
     expect(body).toEqual({ code: 'validation_failed', message: 'Проверьте поля: name', fields })
   })
 
-  it('reports a tracker failure and the domain left behind (R-CR-12)', async () => {
+  it.each([
+    ['KeitaroFailure', 502, 'keitaro_failure'],
+    ['TaskKeyReused', 409, 'task_key_reused'],
+  ])('maps %s to %i', async (typename, status, code) => {
     const { graphql } = fakeBackend({
-      CreateCampaign: {
-        createCampaign: {
-          __typename: 'KeitaroFailure',
-          message: 'Keitaro не создал кампанию. Домен new.example.com создан и остался в трекере.',
-          createdDomain: { id: 7, name: 'new.example.com' },
-        },
-      },
+      CreateCampaign: { createCampaign: { __typename: typename, message: 'почему', createdDomain: null } },
     })
 
-    const { status, body } = await refusal(createCampaign(graphql, INPUT))
-
-    expect(status).toBe(502)
-    expect(body.code).toBe('keitaro_failure')
-    expect(body.message).toContain('new.example.com')
+    expect(await refusal(createCampaign(graphql, INPUT))).toEqual({ status, body: { code, message: 'почему' } })
   })
 })

@@ -11,7 +11,11 @@ const idLike = v.pipe(
 )
 const text = v.pipe(v.string(), v.trim(), v.minLength(1))
 
+/** The ID of a task is made by the browser, so a repeat of the request carries the same one (R-TK-04). */
+const taskId = v.pipe(v.string(), v.uuid())
+
 export const campaignInput = v.object({
+  taskId,
   name: text,
   country: text,
   offerId: id,
@@ -26,8 +30,6 @@ export const fetchInput = v.object({ keitaroId: idLike })
 const seen = v.optional(idLike)
 export const streamRef = v.object({ streamId: text, version: seen })
 export const offerRef = v.object({ streamId: text, offerId: idLike, version: seen })
-/** The ID of a task is made by the browser, so a repeat of the request carries the same one (R-TK-04). */
-const taskId = v.pipe(v.string(), v.uuid())
 export const taskBody = v.object({ taskId })
 export const taskRef = v.object({ taskId })
 export const taskFilter = v.object({

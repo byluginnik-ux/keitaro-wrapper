@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { stepLabel } from '../../composables/task-labels'
 import type { TaskStatus, TaskView, TasksScreen } from '../../../shared/types/api'
 import UiBadge from '../ui/UiBadge.vue'
 import UiButton from '../ui/UiButton.vue'
@@ -32,14 +33,6 @@ const STATUS: Record<TaskStatus, string> = {
 const KIND: Record<TaskView['kind'], string> = {
   publish_stream: 'Публикация потока',
   create_campaign: 'Создание кампании',
-}
-const STEP: Record<string, string> = {
-  'queued': 'Поставлена',
-  'attempt': 'Попытка',
-  'published': 'Опубликовано',
-  'rejected': 'Отклонена',
-  'cancelled': 'Отменена',
-  'nothing to publish': 'Изменений нет',
 }
 
 const counts = computed(() => STATUSES.map(status => ({
@@ -177,7 +170,7 @@ function time(iso: string | null) {
               v-for="(step, index) in task.steps"
               :key="index"
             >
-              <span class="data">{{ time(step.at) }}</span> {{ STEP[step.name] ?? step.name }}<template v-if="step.note">
+              <span class="data">{{ time(step.at) }}</span> {{ stepLabel(step.name) }}<template v-if="step.note">
                 {{ step.note }}
               </template>
             </li>
