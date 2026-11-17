@@ -100,6 +100,7 @@ def _stream(row: StreamRow) -> Stream:
         kind=row.kind,
         offers=tuple(_offer(offer) for offer in row.offers),
         version=row.version,
+        publishing=row.publishing_task_id,
     )
 
 
@@ -111,6 +112,7 @@ def _stream_values(stream: Stream) -> dict[str, Any]:
         "position": stream.position,
         "kind": stream.kind,
         "version": stream.version + 1,
+        "publishing_task_id": stream.publishing,
     }
 
 

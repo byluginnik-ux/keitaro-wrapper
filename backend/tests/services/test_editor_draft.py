@@ -315,7 +315,6 @@ ACTIONS: dict[str, Action] = {
     "remove": lambda editor, stream, seen: editor.remove_offer(stream.id, B, expected=seen),
     "pin": lambda editor, stream, seen: editor.pin_share(stream.id, A, 50, expected=seen),
     "cancel": lambda editor, stream, seen: editor.cancel(stream.id, expected=seen),
-    "push": lambda editor, stream, seen: editor.push(stream.id, expected=seen),
 }
 
 

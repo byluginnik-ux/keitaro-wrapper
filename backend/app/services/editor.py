@@ -11,10 +11,10 @@ from app.services.creator import utc_now
 from app.services.errors import (
     CampaignNotFoundError,
     DraftNotPublishedError,
-    EmptyStreamError,
     KeitaroError,
     OfferAlreadyInStreamError,
     OfferNotFoundError,
+    StreamBusyError,
     StreamConflictError,
     StreamNotFoundError,
     ValidationError,
@@ -63,7 +63,7 @@ class FetchedStreams:
 
 
 class EditorService:
-    """Keep a local draft of every stream and reconcile it with the tracker (R-ED-01…24)."""
+    """Keep a local draft of every stream and reconcile it with the tracker (R-ED-01…16)."""
 
     def __init__(
         self,
@@ -104,6 +104,9 @@ class EditorService:
     async def _fetch(self, keitaro_campaign_id: int) -> FetchedStreams:
         campaign = await self._storage.campaigns.get_by_keitaro_id(keitaro_campaign_id)
         ours = await self.streams(campaign.id) if campaign else []
+        busy = next((stream for stream in ours if stream.publishing), None)
+        if busy is not None:
+            raise StreamBusyError(busy.name)
         drafts = [stream.name for stream in ours if stream.dirty]
         if drafts:
             raise DraftNotPublishedError(drafts)
@@ -220,60 +223,13 @@ class EditorService:
         )
         return await self._write(restored)
 
-    async def push(self, stream_id: UUID, *, expected: int | None = None) -> Stream:
-        """Publish the draft: send the active offers and their shares to the tracker (R-ED-20)."""
-        stream = await self._stream(stream_id, expected)
-        active = [link for link in stream.offers if link.state is OfferState.ACTIVE]
-        if not active:
-            raise EmptyStreamError(stream.name)
-        if not stream.dirty:
-            return stream
-        details: Details = {
-            "keitaro_id": stream.keitaro_id,
-            "before": [
-                {"offer_id": link.offer_id, "share": link.published.share}
-                for link in stream.offers
-                if link.published is not None and link.published.state is OfferState.ACTIVE
-            ],
-            "after": [{"offer_id": link.offer_id, "share": link.share} for link in active],
-        }
-        try:
-            await self._keitaro.replace_stream_offers(
-                stream.keitaro_id,
-                [tracker.StreamOffer(offer_id=link.offer_id, share=link.share) for link in active],
-            )
-        except KeitaroError as error:
-            await self._storage.audit.record(
-                self._entry(
-                    "stream.push_failed",
-                    stream.campaign_id,
-                    stream.id,
-                    details | {"error": str(error)},
-                )
-            )
-            raise
-        published = replace(
-            stream,
-            offers=tuple(
-                replace(link, published=Published(link.share, link.state, link.pinned))
-                for link in stream.offers
-            ),
-        )
-        try:
-            async with self._storage.transaction() as work:
-                saved = await work.streams.save(published)
-                await work.audit.record(
-                    self._entry("stream.pushed", stream.campaign_id, stream.id, details)
-                )
-        except StorageConflictError as error:
-            raise StreamConflictError(await self._storage.streams.get(stream.id)) from error
-        return saved
-
     async def _stream(self, stream_id: UUID, expected: int | None = None) -> Stream:
         """Read the stream the user acts on; `expected` is the version they saw (R-CC-06)."""
         stream = await self._storage.streams.get(stream_id)
         if stream is None:
             raise StreamNotFoundError
+        if stream.publishing is not None:
+            raise StreamBusyError(stream.name)
         if expected is not None and stream.version != expected:
             raise StreamConflictError(stream)
         return stream

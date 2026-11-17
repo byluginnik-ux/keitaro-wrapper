@@ -136,6 +136,20 @@ async def test_stream_without_offers_is_kept(storage: Storage) -> None:
     assert await storage.streams.get(redirect.id) == redirect
 
 
+async def test_stream_keeps_the_task_that_publishes_it(storage: Storage) -> None:
+    """R-ED-25."""
+    owner = campaign()
+    await storage.campaigns.add(owner)
+    task_id = uuid4()
+
+    idle = await storage.streams.save(offers_stream(owner.id))
+    busy = await storage.streams.save(replace(idle, publishing=task_id))
+    freed = await storage.streams.save(replace(busy, publishing=None))
+
+    assert (idle.publishing, busy.publishing, freed.publishing) == (None, task_id, None)
+    assert await storage.streams.get(idle.id) == freed
+
+
 async def test_save_all_is_all_or_nothing(storage: Storage) -> None:
     """R-ST-05: a stream of an unknown campaign rejects the whole batch."""
     owner = campaign()

@@ -21,6 +21,7 @@ from app.services.errors import (
     DomainError,
     DraftNotPublishedError,
     KeitaroError,
+    StreamBusyError,
     ValidationError,
 )
 
@@ -90,6 +91,12 @@ class Query:
         found = await info.context.editor.streams(owner) if owner else []
         return [mappers.to_stream(item) for item in found]
 
+    @strawberry.field(description="Задача по идентификатору; null — такой нет")
+    async def task(self, info: AppInfo, id: strawberry.ID) -> gql.Task | None:  # noqa: A002 — the argument name is fixed by the contract
+        task_id = mappers.to_uuid(id)
+        found = await info.context.publisher.task(task_id) if task_id else None
+        return mappers.to_task(found) if found else None
+
 
 @strawberry.type
 class Mutation:
@@ -123,6 +130,8 @@ class Mutation:
             fetched = await info.context.editor.fetch(campaign_keitaro_id)
         except DraftNotPublishedError as error:
             return gql.DraftNotPublished(message=str(error))
+        except StreamBusyError as error:
+            return gql.StreamBusy(message=str(error))
         except CampaignNotFoundError as error:
             return gql.CampaignNotFound(message=str(error))
         except KeitaroError as error:
@@ -213,18 +222,26 @@ class Mutation:
 
     @strawberry.mutation(
         description=(
-            "Опубликовать черновик: отправить в Keitaro активные офферы потока с их долями"
+            "Поставить задачу публикации: обработчик отправит в Keitaro активные офферы потока"
         )
     )
-    async def push_stream(
+    async def publish_stream(
         self,
         info: AppInfo,
-        stream_id: strawberry.ID,
-        expected_version: strawberry.Maybe[int | None] = None,
-    ) -> gql.StreamResult:
-        editor = info.context.editor
-        expected = mappers.optional(expected_version)
-        return await stream_result(stream_id, lambda id_: editor.push(id_, expected=expected))
+        input: gql.PublishStreamInput,  # noqa: A002 — the argument name is fixed by the contract
+    ) -> gql.PublishStreamResult:
+        task_id = mappers.to_uuid(input.task_id)
+        if task_id is None:
+            raise ValidationError({"taskId": "Идентификатор задачи — UUID"})
+        try:
+            task = await info.context.publisher.request(
+                mappers.to_uuid(input.stream_id) or UNKNOWN_STREAM,
+                task_id,
+                expected=mappers.optional(input.expected_version),
+            )
+        except DomainError as error:
+            return mappers.to_publish_refusal(error)
+        return mappers.to_task(task)
 
 
 MAX_TOKENS = 1000

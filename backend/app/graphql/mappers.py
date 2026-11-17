@@ -1,5 +1,6 @@
 """Translate what services return into the types of the contract."""
 
+from datetime import datetime
 from uuid import UUID
 
 import strawberry
@@ -17,8 +18,10 @@ from app.services.errors import (
     OfferAlreadyInStreamError,
     OfferNotFoundError,
     ShareOverflowError,
+    StreamBusyError,
     StreamConflictError,
     StreamNotFoundError,
+    TaskKeyReusedError,
     ValidationError,
 )
 from app.services.shares import OfferState
@@ -109,6 +112,7 @@ def to_stream(stream: models.Stream) -> gql.Stream:
         kind=stream.kind,
         dirty=stream.dirty,
         version=stream.version,
+        publishing_task_id=strawberry.ID(str(stream.publishing)) if stream.publishing else None,
         offers=[to_stream_offer(link) for link in stream.offers],
     )
 
@@ -135,22 +139,22 @@ def to_uuid(value: strawberry.ID) -> UUID | None:
 
 type StreamRefusal = (
     gql.StreamConflict
+    | gql.StreamBusy
     | gql.StreamNotFound
     | gql.OfferNotFound
     | gql.OfferAlreadyInStream
     | gql.ShareOverflow
-    | gql.EmptyStream
     | gql.ValidationFailed
     | gql.KeitaroFailure
 )
 
 
 MESSAGE_ONLY = {
+    StreamBusyError: gql.StreamBusy,
     StreamNotFoundError: gql.StreamNotFound,
     OfferNotFoundError: gql.OfferNotFound,
     OfferAlreadyInStreamError: gql.OfferAlreadyInStream,
     ShareOverflowError: gql.ShareOverflow,
-    EmptyStreamError: gql.EmptyStream,
 }
 
 
@@ -163,6 +167,58 @@ def to_stream_refusal(error: DomainError) -> StreamRefusal:
     if isinstance(error, StreamConflictError) and error.current is not None:
         return gql.StreamConflict(message=str(error), stream=to_stream(error.current))
     for kind, answer in MESSAGE_ONLY.items():
+        if isinstance(error, kind):
+            return answer(message=str(error))
+    raise error
+
+
+def _time(moment: datetime | None) -> str | None:
+    return moment.isoformat() if moment else None
+
+
+def to_task(task: models.Task) -> gql.Task:
+    refusal = task.refusal
+    domain = refusal.details.get("created_domain") if refusal else None
+    return gql.Task(
+        id=strawberry.ID(str(task.id)),
+        kind=gql.TaskKind[task.kind.name],
+        status=gql.TaskStatus[task.status.name],
+        attempts=task.attempts,
+        created_at=task.created_at.isoformat(),
+        started_at=_time(task.started_at),
+        finished_at=_time(task.finished_at),
+        campaign_id=strawberry.ID(str(task.campaign_id)) if task.campaign_id else None,
+        stream_id=strawberry.ID(str(task.stream_id)) if task.stream_id else None,
+        refusal=gql.TaskRefusal(
+            message=refusal.message,
+            created_domain=gql.Domain(id=domain["id"], name=domain["name"]) if domain else None,
+        )
+        if refusal
+        else None,
+        steps=[
+            gql.TaskStep(name=step.name, at=step.at.isoformat(), note=step.note)
+            for step in task.steps
+        ],
+    )
+
+
+type PublishRefusal = (
+    gql.StreamConflict | gql.StreamBusy | gql.StreamNotFound | gql.EmptyStream | gql.TaskKeyReused
+)
+
+NOT_QUEUED = {
+    StreamBusyError: gql.StreamBusy,
+    StreamNotFoundError: gql.StreamNotFound,
+    EmptyStreamError: gql.EmptyStream,
+    TaskKeyReusedError: gql.TaskKeyReused,
+}
+
+
+def to_publish_refusal(error: DomainError) -> PublishRefusal:
+    """Turn the reason a publication was not queued into its member of PublishStreamResult."""
+    if isinstance(error, StreamConflictError) and error.current is not None:
+        return gql.StreamConflict(message=str(error), stream=to_stream(error.current))
+    for kind, answer in NOT_QUEUED.items():
         if isinstance(error, kind):
             return answer(message=str(error))
     raise error

@@ -5,6 +5,7 @@ from strawberry.fastapi import BaseContext
 from app.services.catalog import CatalogService
 from app.services.creator import CreatorService
 from app.services.editor import EditorService
+from app.services.publisher import PublisherService
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,4 +23,5 @@ class Context(BaseContext):
     catalog: CatalogService
     creator: CreatorService
     editor: EditorService
+    publisher: PublisherService
     service: ServiceInfo

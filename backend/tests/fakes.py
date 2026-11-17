@@ -44,13 +44,22 @@ class FakeKeitaro:
     stream_requests: list[NewStream] = field(default_factory=list[NewStream])
     calls: Counter[str] = field(default_factory=Counter[str])
     fail_on: set[str] = field(default_factory=set[str])
+    fail_status: int | None = 500
+    """What a failing method answers with; None means there was no answer at all."""
+    lose_answer: set[str] = field(default_factory=set[str])
+    """Methods that do their work and then lose the answer on its way back."""
     _next_id: int = 1000
 
     def _enter(self, method: str) -> None:
         self.calls[method] += 1
         if method in self.fail_on:
             message = f"Keitaro: {method} failed"
-            raise KeitaroError(message, 500)
+            raise KeitaroError(message, self.fail_status)
+
+    def _leave(self, method: str) -> None:
+        if method in self.lose_answer:
+            message = f"Keitaro: no answer to {method}"
+            raise KeitaroError(message)
 
     def _new_id(self) -> int:
         self._next_id += 1
@@ -122,6 +131,7 @@ class FakeKeitaro:
         self._enter("replace_stream_offers")
         updated = self.streams[stream_id].model_copy(update={"offers": tuple(offers)})
         self.streams[stream_id] = updated
+        self._leave("replace_stream_offers")
         return updated
 
 

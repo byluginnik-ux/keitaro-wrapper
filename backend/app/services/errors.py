@@ -110,6 +110,24 @@ class EmptyStreamError(DomainError):
         super().__init__(f"В потоке «{name}» нет активных офферов — публиковать нечего")
 
 
+class StreamBusyError(DomainError):
+    """A task is publishing the stream; until it ends the stream stays as it is (R-ED-25)."""
+
+    code = "stream_busy"
+
+    def __init__(self, name: str) -> None:
+        super().__init__(f"Поток «{name}» публикуется — дождитесь завершения")
+
+
+class TaskKeyReusedError(DomainError):
+    """The ID of a task was already used for another request (R-TK-04)."""
+
+    code = "task_key_reused"
+
+    def __init__(self) -> None:
+        super().__init__("Этот идентификатор задачи уже использован для другого запроса")
+
+
 class StreamConflictError(DomainError):
     """Somebody else changed the stream first; nothing of this request was applied (R-CC-03).
 

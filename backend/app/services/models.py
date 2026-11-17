@@ -68,6 +68,8 @@ class Stream:
     offers: tuple[OfferLink, ...] = ()
     version: int = field(default=0, compare=False)
     """How many times the stream was written; bookkeeping, not part of its value (R-CC-01)."""
+    publishing: UUID | None = None
+    """The unfinished task that publishes the stream; while it is set, the stream is busy."""
 
     @property
     def dirty(self) -> bool:

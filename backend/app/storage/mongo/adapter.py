@@ -116,6 +116,7 @@ def _stream(document: Document) -> Stream:
         kind=document["kind"],
         offers=tuple(_offer(offer) for offer in document["offers"]),
         version=document["version"],
+        publishing=document.get("publishing"),
     )
 
 
@@ -129,6 +130,7 @@ def _stream_document(stream: Stream) -> Document:
         "kind": stream.kind,
         "offers": [_offer_document(link) for link in stream.offers],
         "version": stream.version + 1,
+        "publishing": stream.publishing,
     }
 
 

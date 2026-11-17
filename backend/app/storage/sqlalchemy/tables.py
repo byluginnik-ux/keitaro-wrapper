@@ -36,6 +36,7 @@ class StreamRow(Base):
     position: Mapped[int]
     kind: Mapped[str] = mapped_column(String(32))
     version: Mapped[int] = mapped_column(server_default="1")
+    publishing_task_id: Mapped[UUID | None]
     offers: Mapped[list["StreamOfferRow"]] = relationship(
         order_by="StreamOfferRow.position", lazy="selectin", viewonly=True
     )

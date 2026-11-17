@@ -6,12 +6,8 @@ from strawberry.fastapi import GraphQLRouter
 
 from app.graphql.context import Context, ServiceInfo
 from app.graphql.schema import build_schema
-from app.keitaro.client import KeitaroClient, create_http_client
-from app.services.catalog import CatalogService
-from app.services.creator import CreatorService
-from app.services.editor import EditorService
+from app.runtime import Runtime, open_runtime
 from app.settings import Settings
-from app.storage.factory import open_storage
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -25,25 +21,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-        async with (
-            create_http_client(
-                config.keitaro_base_url, config.keitaro_api_key.get_secret_value()
-            ) as http,
-            open_storage(config) as storage,
-        ):
-            keitaro = KeitaroClient(http)
-            catalog = CatalogService(keitaro)
-            app.state.catalog = catalog
-            app.state.creator = CreatorService(
-                keitaro, catalog, storage, name_prefix=config.campaign_name_prefix
-            )
-            app.state.editor = EditorService(keitaro, catalog, storage)
+        async with open_runtime(config) as runtime:
+            app.state.runtime = runtime
             yield
 
     def context(request: Request) -> Context:
-        state = request.app.state
+        runtime: Runtime = request.app.state.runtime
         return Context(
-            catalog=state.catalog, creator=state.creator, editor=state.editor, service=service
+            catalog=runtime.catalog,
+            creator=runtime.creator,
+            editor=runtime.editor,
+            publisher=runtime.publisher,
+            service=service,
         )
 
     app = FastAPI(
