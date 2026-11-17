@@ -37,7 +37,7 @@ class RabbitBus:
         self._names = [name for queue in queues for name in (queue.name, queue.dead)]
 
     async def publish(self, message: Message) -> None:
-        raise NotImplementedError
+        await self._exchange.publish(_outgoing(message), routing_key=message.topic, mandatory=False)
 
     async def consume(self, queue: str, handler: Handler) -> None:
         source = await self._channel.get_queue(queue)

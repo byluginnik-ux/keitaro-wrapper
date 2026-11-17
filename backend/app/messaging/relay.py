@@ -2,8 +2,9 @@ import asyncio
 import logging
 from collections.abc import Callable
 from datetime import datetime, timedelta
+from uuid import UUID
 
-from app.messaging.ports import MessageBus
+from app.messaging.ports import Message, MessageBus
 from app.services.creator import utc_now
 from app.storage.ports import Storage
 
@@ -36,7 +37,17 @@ class Relay:
 
     async def send_waiting(self) -> int:
         """Make one pass and tell how many messages left."""
-        raise NotImplementedError
+        claimed = await self._storage.outbox.claim(
+            limit=self._batch, now=self._clock(), lease=self._lease
+        )
+        sent = list[UUID]()
+        try:
+            for message in claimed:
+                await self._bus.publish(Message(message.id, message.topic, message.payload))
+                sent.append(message.id)
+        finally:
+            await self._storage.outbox.mark_sent(sent, self._clock())
+        return len(sent)
 
     def nudge(self) -> None:
         """Tell the relay that something was just written; it need not wait for the next poll."""

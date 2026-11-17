@@ -28,7 +28,8 @@ class MemoryBus:
         self._retries: set[asyncio.Task[None]] = set()
 
     async def publish(self, message: Message) -> None:
-        raise NotImplementedError
+        for name in self._routes.get(message.topic, ()):
+            self._queues[name].put_nowait(message)
 
     async def consume(self, queue: str, handler: Handler) -> None:
         self._consumers[queue].append(asyncio.create_task(self._serve(queue, handler)))
