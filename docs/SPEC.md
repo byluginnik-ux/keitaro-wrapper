@@ -235,6 +235,8 @@ Admin API: база `{KEITARO_BASE_URL}/admin_api/v1`, заголовок `Api-K
 | Требования | Фича | Тест |
 |------------|------|------|
 | R-ARCH-01, R-ARCH-02, R-ARCH-08, R-ARCH-09 | F02a | `contracts/tests/test_contract.py`, `contracts/scripts/check.sh` |
+| R-ARCH-06 | F02 | сервисы проверяются без GraphQL: `backend/tests/services/test_creator.py`, `backend/tests/services/test_editor_draft.py`, `backend/tests/services/test_publisher.py` |
+| R-ARCH-07 | F06 | `backend/tests/services/test_shares.py` |
 | R-ARCH-03 | F02 | `backend/tests/graphql/test_contract_conformance.py`, `backend/tests/graphql/test_catalog_queries.py` |
 | R-KT-01 … R-KT-04, R-KT-06 | F01 | `backend/tests/keitaro/test_client.py` |
 | R-KT-07 | F02 | `backend/tests/services/test_catalog.py`, `backend/tests/services/test_countries.py` |
@@ -268,7 +270,7 @@ Admin API: база `{KEITARO_BASE_URL}/admin_api/v1`, заголовок `Api-K
 | R-UX-10 … R-UX-16 | F11 | `frontend/tests/app/editor.test.ts`; сценарии S1–S8 и работа с клавиатуры — `frontend/tests/e2e/editor.spec.ts` |
 | R-Q-02, R-Q-04, R-Q-06 | F00 | `.pre-commit-config.yaml`, `.github/workflows/ci.yml`, `backend/tests/test_health.py`, `frontend/tests/server/health.test.ts` |
 | R-Q-01, R-Q-03, R-Q-05 | F12 | история git (пары `test` → `feat`); `backend/tests/fakes.py`, `backend/tests/fake_tracker.py`; `README.md` |
-| R-Q-07 | F12 | `backend/tests/graphql/test_hardening.py`, `backend/tests/test_app.py` |
+| R-Q-07 | F12 | `backend/tests/graphql/test_hardening.py`, `backend/tests/test_app.py`; ручная проверка на запущенном стеке (README, «Защита API») |
 
 ## 12. Допущения
 
