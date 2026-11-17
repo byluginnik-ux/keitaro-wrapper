@@ -85,7 +85,7 @@ describe('tasks board (R-UX-30, R-UX-31)', () => {
     expect(text).toContain('12:00:01UTCПопытка1')
   })
 
-  it('offers to cancel a waiting task and to repeat a rejected publication', async () => {
+  it('offers to cancel a waiting task and to repeat a rejected one', async () => {
     const waiting = task()
     const rejected = task({ id: 'task-2', status: 'rejected', finished: true })
     const done = task({ id: 'task-3', status: 'succeeded', finished: true })
@@ -96,7 +96,11 @@ describe('tasks board (R-UX-30, R-UX-31)', () => {
     await buttons[0]?.trigger('click')
     await buttons[1]?.trigger('click')
 
-    expect(buttons.map(item => item.text())).toEqual(['Отменить задачу task-1', 'Повторить задачу task-2'])
+    expect(buttons.map(item => item.text())).toEqual([
+      'Отменить задачу task-1',
+      'Повторить задачу task-2',
+      'Повторить задачу task-4',
+    ])
     expect(wrapper.emitted('cancel')).toEqual([[waiting]])
     expect(wrapper.emitted('retry')).toEqual([[rejected]])
   })

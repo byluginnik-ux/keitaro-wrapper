@@ -34,7 +34,7 @@ def context_for(
     service = ServiceInfo(campaign_name_prefix=PREFIX, tracker_url="https://tracker.test")
     publisher = PublisherService(keitaro, storage, clock=lambda: NOW)
     bus = MemoryBus(QUEUES, max_attempts=3, retry_delay=0)
-    tasks = TasksService(storage, bus, publisher, clock=lambda: NOW)
+    tasks = TasksService(storage, bus, publisher, creator, clock=lambda: NOW)
     return Context(
         catalog=catalog,
         creator=creator,

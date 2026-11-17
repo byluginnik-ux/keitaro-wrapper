@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
-import { A, B, C, D, addOffer, expectDraft, failTracker, flow, inTracker, makeCampaign, openCampaign } from './support'
+import {
+  A, B, C, D, TRACKER, addOffer, expectDraft, failTracker, flow, inTracker, makeCampaign, openCampaign,
+} from './support'
 
 test('a rejected publication is found among the tasks and repeated (R-UX-30, R-UX-31, R-TK-09)', async ({ page, request }) => {
   const scenario = await makeCampaign(request)
@@ -28,6 +30,36 @@ test('a rejected publication is found among the tasks and repeated (R-UX-30, R-U
   expect(await inTracker(request, scenario.offersStreamId)).toEqual([[A, 25], [B, 25], [C, 25], [D, 25]])
   await page.goto(campaign)
   await expectDraft(page, false)
+})
+
+test('a rejected creation is repeated from the tasks page (R-TK-09, R-UX-31)', async ({ page, request }) => {
+  const name = `e2e_retry_${Date.now()}`
+  await page.goto('/create')
+  await page.getByLabel('Название').fill(name)
+  await page.getByRole('combobox', { name: 'Страна' }).fill('авст')
+  await page.getByRole('option', { name: /Австралия/ }).click()
+  await page.getByRole('combobox', { name: 'Оффер' }).fill('offer b')
+  await page.getByRole('option', { name: /Offer B/ }).click()
+  await page.getByRole('combobox', { name: 'Домен' }).fill('tracker')
+  await page.getByRole('option', { name: /tracker\.example\.com/ }).click()
+  await failTracker(request, 'create_stream', true)
+  try {
+    await page.getByRole('button', { name: 'Создать кампанию' }).click()
+    await expect(page.getByRole('alert')).toContainText('Кампания удалена')
+  }
+  finally {
+    await failTracker(request, 'create_stream', false)
+  }
+
+  await page.getByRole('link', { name: 'Задачи' }).click()
+  await page.getByLabel('Статус').selectOption('rejected')
+  const rejected = page.locator('[data-task]').filter({ hasText: 'Создание кампании' }).first()
+  await rejected.getByRole('button', { name: /Повторить/ }).click()
+
+  await page.getByLabel('Статус').selectOption('succeeded')
+  await expect(page.locator('[data-task]').first()).toContainText('повтор')
+  const campaigns = await (await request.get(`${TRACKER}/__test/campaigns`)).json() as { name: string }[]
+  expect(campaigns.filter(campaign => campaign.name === `test_bulygin_${name}`)).toHaveLength(1)
 })
 
 test('the tasks page tells who listens to the queue (R-UX-30)', async ({ page }) => {

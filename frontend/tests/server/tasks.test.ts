@@ -67,6 +67,7 @@ describe('task actions', () => {
     ['RetryTask', 'TaskNotFound', 404, 'task_not_found'],
     ['RetryTask', 'TaskNotRetryable', 409, 'task_not_retryable'],
     ['RetryTask', 'StreamBusy', 409, 'stream_busy'],
+    ['RetryTask', 'KeitaroFailure', 502, 'keitaro_failure'],
     ['RetryTask', 'StreamNotFound', 404, 'stream_not_found'],
     ['RetryTask', 'EmptyStream', 422, 'empty_stream'],
     ['RetryTask', 'TaskKeyReused', 409, 'task_key_reused'],
@@ -77,6 +78,18 @@ describe('task actions', () => {
       : retryTask(graphql, TASK_ID, { taskId: NEW_ID })
 
     expect(await refusal(action)).toEqual({ status, body: { code, message: 'почему' } })
+  })
+
+  it('passes on the remarks about a creation that is no longer valid (R-TK-09)', async () => {
+    const fields = [{ field: 'groupId', message: 'В Keitaro нет такой группы' }]
+    const { graphql } = fakeBackend({
+      RetryTask: { result: { __typename: 'ValidationFailed', message: 'Проверьте поля: groupId', fields } },
+    })
+
+    expect(await refusal(retryTask(graphql, TASK_ID, { taskId: NEW_ID }))).toEqual({
+      status: 422,
+      body: { code: 'validation_failed', message: 'Проверьте поля: groupId', fields },
+    })
   })
 
   it('rejects malformed IDs without asking the backend', async () => {

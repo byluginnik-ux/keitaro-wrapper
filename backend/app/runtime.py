@@ -77,6 +77,14 @@ def assemble(
     """Wire the services to their tracker, storage and bus."""
     catalog = CatalogService(keitaro)
     relay = Relay(storage, bus)
+    creator = CreatorService(
+        keitaro,
+        catalog,
+        storage,
+        name_prefix=settings.campaign_name_prefix,
+        max_attempts=settings.task_max_attempts,
+        announce=relay.nudge,
+    )
     publisher = PublisherService(
         keitaro, storage, max_attempts=settings.task_max_attempts, announce=relay.nudge
     )
@@ -85,17 +93,10 @@ def assemble(
         bus=bus,
         relay=relay,
         catalog=catalog,
-        creator=CreatorService(
-            keitaro,
-            catalog,
-            storage,
-            name_prefix=settings.campaign_name_prefix,
-            max_attempts=settings.task_max_attempts,
-            announce=relay.nudge,
-        ),
+        creator=creator,
         editor=EditorService(keitaro, catalog, storage),
         publisher=publisher,
-        tasks=TasksService(storage, bus, publisher),
+        tasks=TasksService(storage, bus, publisher, creator),
     )
 
 

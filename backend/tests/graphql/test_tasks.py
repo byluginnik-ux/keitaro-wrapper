@@ -8,6 +8,7 @@ import pytest
 from app.graphql.context import Context
 from app.graphql.schema import schema
 from app.messaging.ports import Message
+from app.services.creator import CREATE_REQUESTED
 from app.services.publisher import PUBLISH_REQUESTED
 from tests.fakes import CAMPAIGN_ID, D, FakeKeitaro, tracker_with_campaign
 from tests.graphql.support import NOW, context_for
@@ -150,3 +151,35 @@ async def test_rejected_publication_is_repeated(
     )
     assert malformed.errors is not None
     assert malformed.errors[0].extensions == {"code": "validation_failed"}
+
+
+async def test_rejected_creation_is_repeated_through_the_api() -> None:
+    """R-TK-09."""
+    keitaro = FakeKeitaro(fail_on={"create_stream"}, fail_status=400)
+    context = context_for(keitaro)
+    failed = str(uuid4())
+    create = """
+    mutation($input: CreateCampaignInput!) { createCampaign(input: $input) { __typename } }
+    """
+    form = {
+        "taskId": failed,
+        "name": "test_bulygin_au",
+        "country": "AU",
+        "offerId": D,
+        "groupId": 10332,
+        "trafficSourceId": 836,
+        "domainId": 1813,
+    }
+    await run(context, create, input=form)
+    await context.creator.handle(Message(uuid4(), CREATE_REQUESTED, {"task_id": failed}))
+    keitaro.fail_on.clear()
+    retry = RETRY.replace(
+        "... on TaskNotRetryable", "... on ValidationFailed { message } ... on TaskNotRetryable"
+    )
+
+    again = await steer(context, retry, input={"taskId": failed, "newTaskId": str(uuid4())})
+    keitaro.groups.clear()
+    refused = await steer(context, retry, input={"taskId": failed, "newTaskId": str(uuid4())})
+
+    assert (again["__typename"], again["status"], again["retryOf"]) == ("Task", "PENDING", failed)
+    assert refused["__typename"] == "ValidationFailed"

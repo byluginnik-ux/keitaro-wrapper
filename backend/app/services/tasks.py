@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 from app.messaging.ports import MessageBus, QueueStats
-from app.services.creator import utc_now
+from app.services.creator import CreatorService, utc_now
 from app.services.errors import (
     TaskNotCancellableError,
     TaskNotFoundError,
@@ -35,12 +35,14 @@ class TasksService:
         storage: Storage,
         bus: MessageBus,
         publisher: PublisherService,
+        creator: CreatorService,
         *,
         clock: Callable[[], datetime] = utc_now,
     ) -> None:
         self._storage = storage
         self._bus = bus
         self._publisher = publisher
+        self._creator = creator
         self._clock = clock
 
     async def recent(

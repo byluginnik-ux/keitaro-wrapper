@@ -8,12 +8,14 @@ from app.messaging.memory import MemoryBus
 from app.messaging.ports import Message, QueueStats
 from app.runtime import QUEUES, TASKS
 from app.services.catalog import CatalogService
+from app.services.creator import CREATE_REQUESTED, CreatorService, NewCampaignRequest
 from app.services.editor import EditorService
 from app.services.errors import (
     StreamBusyError,
     TaskNotCancellableError,
     TaskNotFoundError,
     TaskNotRetryableError,
+    ValidationError,
 )
 from app.services.models import Stream, Task, TaskKind, TaskStatus
 from app.services.publisher import PUBLISH_REQUESTED, PublisherService
@@ -21,7 +23,7 @@ from app.services.tasks import TasksService
 from app.storage.memory import create_memory_storage
 from app.storage.ports import Storage
 from tests.fakes import CAMPAIGN_ID, OFFERS_STREAM_ID, D, FakeKeitaro, tracker_with_campaign
-from tests.graphql.support import NOW
+from tests.graphql.support import NOW, PREFIX
 
 pytestmark = pytest.mark.anyio
 
@@ -51,7 +53,9 @@ def publisher(keitaro: FakeKeitaro, storage: Storage) -> PublisherService:
 @pytest.fixture
 def tasks(storage: Storage, publisher: PublisherService) -> TasksService:
     bus = MemoryBus(QUEUES, max_attempts=3, retry_delay=0)
-    return TasksService(storage, bus, publisher, clock=lambda: NOW)
+    return TasksService(
+        storage, bus, publisher, creation(FakeKeitaro(), storage), clock=lambda: NOW
+    )
 
 
 @pytest.fixture
@@ -178,3 +182,75 @@ async def test_what_cannot_be_repeated(
         await tasks.retry(uuid4(), uuid4())
     with pytest.raises(StreamBusyError):
         await tasks.retry(failed.id, uuid4())
+
+
+def creation(keitaro: FakeKeitaro, storage: Storage) -> CreatorService:
+    return CreatorService(
+        keitaro, CatalogService(keitaro), storage, name_prefix=PREFIX, clock=lambda: NOW
+    )
+
+
+NEW_CAMPAIGN = NewCampaignRequest(
+    name="test_bulygin_again",
+    country="AU",
+    offer_id=D,
+    group_id=10332,
+    traffic_source_id=836,
+    domain_id=1813,
+)
+
+
+async def test_rejected_creation_is_repeated_from_its_own_request(
+    keitaro: FakeKeitaro, storage: Storage, publisher: PublisherService
+) -> None:
+    """R-TK-09: the request the task was queued with is checked and queued again."""
+    creator = creation(keitaro, storage)
+    tasks = TasksService(
+        storage, MemoryBus(QUEUES, max_attempts=3, retry_delay=0), publisher, creator
+    )
+    keitaro.fail_on.add("create_stream")
+    keitaro.fail_status = 400
+    failed = await creator.request(NEW_CAMPAIGN, uuid4())
+    await creator.handle(Message(uuid4(), CREATE_REQUESTED, {"task_id": str(failed.id)}, 1))
+    keitaro.fail_on.clear()
+    new_id = uuid4()
+
+    again = await tasks.retry(failed.id, new_id)
+    await creator.handle(Message(uuid4(), CREATE_REQUESTED, {"task_id": str(new_id)}, 1))
+
+    done = await storage.tasks.get(new_id)
+    assert done is not None
+    assert (again.kind, again.retry_of, again.status) == (
+        TaskKind.CREATE_CAMPAIGN,
+        failed.id,
+        TaskStatus.PENDING,
+    )
+    assert done.status is TaskStatus.SUCCEEDED
+    assert [campaign.name for campaign in keitaro.campaigns.values()].count(
+        "test_bulygin_again"
+    ) == 1
+
+    keitaro.groups.clear()
+    with pytest.raises(ValidationError):
+        await tasks.retry(failed.id, uuid4())
+
+
+async def test_creation_queued_without_its_request_is_not_repeated(
+    keitaro: FakeKeitaro, storage: Storage, publisher: PublisherService
+) -> None:
+    """R-TK-09: a task of an older version carries no request to repeat."""
+    creator = creation(keitaro, storage)
+    tasks = TasksService(
+        storage, MemoryBus(QUEUES, max_attempts=3, retry_delay=0), publisher, creator
+    )
+    old = Task(
+        id=uuid4(),
+        kind=TaskKind.CREATE_CAMPAIGN,
+        created_at=NOW,
+        fingerprint="old",
+        status=TaskStatus.REJECTED,
+    )
+    await storage.tasks.add(old)
+
+    with pytest.raises(TaskNotRetryableError):
+        await tasks.retry(old.id, uuid4())
