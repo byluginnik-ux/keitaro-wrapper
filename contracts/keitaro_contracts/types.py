@@ -89,6 +89,9 @@ class Stream:
     version: int = strawberry.field(
         description="Номер записи потока: растёт при каждом изменении, возвращается обратно с действием"
     )
+    publishing_task_id: strawberry.ID | None = strawberry.field(
+        description="Задача публикации, которая сейчас выполняется; пока она есть, поток занят"
+    )
     offers: list[StreamOffer] = strawberry.field(
         description="Офферы в порядке добавления; у потока-перенаправления список пуст"
     )
@@ -109,6 +112,13 @@ class DraftNotPublished:
 
 @strawberry.type(description="В Keitaro нет кампании с таким ID")
 class CampaignNotFound:
+    message: str
+
+
+@strawberry.type(
+    description="Поток публикуется: до завершения задачи он не правится и не перезагружается"
+)
+class StreamBusy:
     message: str
 
 
@@ -161,6 +171,71 @@ class StreamConflict:
 class ValidationFailed:
     message: str
     fields: list[FieldError]
+
+
+@strawberry.enum
+class TaskKind(Enum):
+    PUBLISH_STREAM = "PUBLISH_STREAM"
+    CREATE_CAMPAIGN = "CREATE_CAMPAIGN"
+
+
+@strawberry.enum
+class TaskStatus(Enum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    SUCCEEDED = "SUCCEEDED"
+    REJECTED = "REJECTED"
+    CANCELLED = "CANCELLED"
+
+
+@strawberry.type(description="Что задача сделала, по порядку")
+class TaskStep:
+    name: str
+    at: str = strawberry.field(description="Время в ISO 8601")
+    note: str
+
+
+@strawberry.type(description="Почему задача завершилась отказом")
+class TaskRefusal:
+    message: str
+    created_domain: Domain | None = strawberry.field(
+        description="Домен, который успел создаться до отказа и остался в трекере"
+    )
+
+
+@strawberry.type(description="Изменение в Keitaro, которое выполняется отдельно от запроса")
+class Task:
+    id: strawberry.ID = strawberry.field(
+        description="Идентификатор выдаёт клиент; он же ключ идемпотентности"
+    )
+    kind: TaskKind
+    status: TaskStatus
+    attempts: int = strawberry.field(description="Сколько раз обработчик брался за задачу")
+    created_at: str = strawberry.field(description="Время в ISO 8601")
+    started_at: str | None
+    finished_at: str | None
+    campaign_id: strawberry.ID | None
+    stream_id: strawberry.ID | None
+    refusal: TaskRefusal | None = strawberry.field(
+        description="Причина отказа; есть только у задачи со статусом REJECTED"
+    )
+    steps: list[TaskStep]
+
+
+@strawberry.type(description="Этот идентификатор задачи уже использован для другого запроса")
+class TaskKeyReused:
+    message: str
+
+
+@strawberry.input(description="Что опубликовать")
+class PublishStreamInput:
+    stream_id: strawberry.ID
+    task_id: strawberry.ID = strawberry.field(
+        description="Идентификатор новой задачи (UUID); повтор с ним же вернёт ту же задачу"
+    )
+    expected_version: strawberry.Maybe[int | None] = strawberry.field(
+        description="Версия потока, которую видел пользователь; null — действовать по сохранённому сейчас"
+    )
 
 
 @strawberry.input(description="Оффер в потоке, над которым выполняется действие")
@@ -216,18 +291,18 @@ class ServiceInfo:
 
 
 FetchStreamsResult = Annotated[
-    StreamsFetched | DraftNotPublished | CampaignNotFound | KeitaroFailure,
+    StreamsFetched | DraftNotPublished | StreamBusy | CampaignNotFound | KeitaroFailure,
     strawberry.union(name="FetchStreamsResult"),
 ]
 
 StreamResult = Annotated[
     Stream
     | StreamConflict
+    | StreamBusy
     | StreamNotFound
     | OfferNotFound
     | OfferAlreadyInStream
     | ShareOverflow
-    | EmptyStream
     | ValidationFailed
     | KeitaroFailure,
     strawberry.union(name="StreamResult"),
@@ -235,4 +310,9 @@ StreamResult = Annotated[
 
 CreateCampaignResult = Annotated[
     Campaign | ValidationFailed | KeitaroFailure, strawberry.union(name="CreateCampaignResult")
+]
+
+PublishStreamResult = Annotated[
+    Task | StreamConflict | StreamBusy | StreamNotFound | EmptyStream | TaskKeyReused,
+    strawberry.union(name="PublishStreamResult"),
 ]

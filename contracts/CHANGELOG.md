@@ -1,6 +1,13 @@
 # Changelog
 
-Версия одна для npm-пакета и пакета Python. Удаление или переименование — мажорная, добавление — минорная.
+Версия одна для npm-пакета и пакета Python. Удаление или переименование — мажорная, добавление — минорная. До версии 1.0.0 ломающее изменение поднимает минорную версию и помечено словом «Ломающее».
+
+## 0.8.0
+
+- **Ломающее.** Мутация `pushStream` удалена. Вместо неё `publishStream(input: PublishStreamInput!)`: ставит задачу и возвращает `PublishStreamResult = Task | StreamConflict | StreamBusy | StreamNotFound | EmptyStream | TaskKeyReused`.
+- **Ломающее.** Из `StreamResult` убран `EmptyStream`, добавлен `StreamBusy`; в `FetchStreamsResult` добавлен `StreamBusy`.
+- Типы `Task`, `TaskStep`, `TaskRefusal`, `TaskKeyReused`, enum `TaskKind`, `TaskStatus`; запрос `task(id)`.
+- Поле `Stream.publishingTaskId`.
 
 ## 0.7.0
 

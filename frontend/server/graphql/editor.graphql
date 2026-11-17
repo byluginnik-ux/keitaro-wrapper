@@ -14,6 +14,7 @@ fragment StreamFields on Stream {
   kind
   dirty
   version
+  publishingTaskId
   offers {
     offerId
     name
@@ -25,15 +26,29 @@ fragment StreamFields on Stream {
   }
 }
 
+fragment TaskFields on Task {
+  id
+  kind
+  status
+  attempts
+  createdAt
+  startedAt
+  finishedAt
+  campaignId
+  streamId
+  refusal { message createdDomain { id name } }
+  steps { name at note }
+}
+
 fragment StreamOutcome on StreamResult {
   __typename
   ... on Stream { ...StreamFields }
   ... on StreamConflict { message stream { ...StreamFields } }
+  ... on StreamBusy { message }
   ... on StreamNotFound { message }
   ... on OfferNotFound { message }
   ... on OfferAlreadyInStream { message }
   ... on ShareOverflow { message }
-  ... on EmptyStream { message }
   ... on ValidationFailed { message fields { field message } }
   ... on KeitaroFailure { message }
 }
@@ -61,6 +76,7 @@ mutation FetchStreams($keitaroId: Int!) {
       streams { ...StreamFields }
     }
     ... on DraftNotPublished { message }
+    ... on StreamBusy { message }
     ... on CampaignNotFound { message }
     ... on KeitaroFailure { message }
   }
@@ -74,6 +90,18 @@ mutation UnpinShare($input: StreamOfferInput!) { result: unpinShare(input: $inpu
 mutation CancelDraft($streamId: ID!, $expectedVersion: Int) {
   result: cancelDraft(streamId: $streamId, expectedVersion: $expectedVersion) { ...StreamOutcome }
 }
-mutation PushStream($streamId: ID!, $expectedVersion: Int) {
-  result: pushStream(streamId: $streamId, expectedVersion: $expectedVersion) { ...StreamOutcome }
+mutation PublishStream($input: PublishStreamInput!) {
+  result: publishStream(input: $input) {
+    __typename
+    ... on Task { ...TaskFields }
+    ... on StreamConflict { message stream { ...StreamFields } }
+    ... on StreamBusy { message }
+    ... on StreamNotFound { message }
+    ... on EmptyStream { message }
+    ... on TaskKeyReused { message }
+  }
+}
+
+query TaskState($id: ID!) {
+  task(id: $id) { ...TaskFields }
 }

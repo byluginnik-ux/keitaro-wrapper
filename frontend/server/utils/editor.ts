@@ -8,7 +8,6 @@ import {
   EditorScreenDocument,
   FetchStreamsDocument,
   PinShareDocument,
-  PushStreamDocument,
   RemoveOfferDocument,
   TrackerUrlDocument,
   UnpinShareDocument,
@@ -18,7 +17,7 @@ import type { GraphqlClient } from './graphql'
 import { fetchInput, offerBody, offerRef, parse, shareBody, streamRef } from './schemas'
 import { toCampaignView, toStreamView } from './views'
 
-export type StreamAction = 'add' | 'remove' | 'restore' | 'pin' | 'unpin' | 'cancel' | 'push'
+export type StreamAction = 'add' | 'remove' | 'restore' | 'pin' | 'unpin' | 'cancel'
 
 export interface StreamActionInput {
   streamId: unknown
@@ -61,6 +60,8 @@ export async function fetchStreams(graphql: GraphqlClient, body: unknown): Promi
       }
     case 'DraftNotPublished':
       return fail(409, 'draft_not_published', result.message)
+    case 'StreamBusy':
+      return fail(409, 'stream_busy', result.message)
     case 'CampaignNotFound':
       return fail(404, 'campaign_not_found', result.message)
     case 'KeitaroFailure':
@@ -76,6 +77,8 @@ function unwrap(result: StreamOutcomeFragment): StreamView {
       return toStreamView(result)
     case 'StreamConflict':
       return conflict(result.message, toStreamView(result.stream))
+    case 'StreamBusy':
+      return fail(409, 'stream_busy', result.message)
     case 'StreamNotFound':
       return fail(404, 'stream_not_found', result.message)
     case 'OfferNotFound':
@@ -84,8 +87,6 @@ function unwrap(result: StreamOutcomeFragment): StreamView {
       return fail(409, 'offer_already_in_stream', result.message)
     case 'ShareOverflow':
       return fail(422, 'share_overflow', result.message)
-    case 'EmptyStream':
-      return fail(422, 'empty_stream', result.message)
     case 'ValidationFailed':
       return fail(422, 'validation_failed', result.message, result.fields)
     case 'KeitaroFailure':
@@ -100,7 +101,6 @@ const OFFER_ACTIONS = {
   restore: BringBackOfferDocument,
   unpin: UnpinShareDocument,
 } as const
-const STREAM_ACTIONS = { cancel: CancelDraftDocument, push: PushStreamDocument } as const
 
 /** Run one action of the editor; every action answers with the whole stream. */
 export async function runStreamAction(
@@ -129,14 +129,17 @@ export async function runStreamAction(
       const variables = { input: { ...reference, expectedVersion: version } }
       return unwrap((await graphql(OFFER_ACTIONS[action], variables)).result)
     }
-    case 'cancel':
-    case 'push':
-    {
+    case 'cancel': {
       const { streamId, version } = parse(streamRef, input)
       const variables = { streamId, expectedVersion: version }
-      return unwrap((await graphql(STREAM_ACTIONS[action], variables)).result)
+      return unwrap((await graphql(CancelDraftDocument, variables)).result)
     }
     default:
       return assertNever(action)
   }
+}
+
+/** Publication became a task (contract 0.8.0); the route is rebuilt with its tests. */
+export async function publishStream(_graphql: GraphqlClient, _input: StreamActionInput): Promise<StreamView> {
+  return fail(501, 'not_implemented', 'Публикация переводится на задачи')
 }

@@ -75,7 +75,7 @@ export type EmptyStream = {
   message: Scalars['String']['output'];
 };
 
-export type FetchStreamsResult = CampaignNotFound | DraftNotPublished | KeitaroFailure | StreamsFetched;
+export type FetchStreamsResult = CampaignNotFound | DraftNotPublished | KeitaroFailure | StreamBusy | StreamsFetched;
 
 /** Замечание к одному полю ввода */
 export type FieldError = {
@@ -114,8 +114,8 @@ export type Mutation = {
   fetchStreams: FetchStreamsResult;
   /** Задать долю оффера и закрепить её; остальные доли пересчитываются */
   pinShare: StreamResult;
-  /** Опубликовать черновик: отправить в Keitaro активные офферы потока с их долями */
-  pushStream: StreamResult;
+  /** Поставить задачу публикации: обработчик отправит в Keitaro активные офферы потока */
+  publishStream: PublishStreamResult;
   /** Убрать оффер из черновика: он остаётся в потоке со статусом REMOVED и долей 0 */
   removeOffer: StreamResult;
   /** Снять закрепление; оффер снова участвует в пересчёте */
@@ -154,9 +154,8 @@ export type MutationPinShareArgs = {
 };
 
 
-export type MutationPushStreamArgs = {
-  expectedVersion?: InputMaybe<Scalars['Int']['input']>;
-  streamId: Scalars['ID']['input'];
+export type MutationPublishStreamArgs = {
+  input: PublishStreamInput;
 };
 
 
@@ -202,6 +201,17 @@ export type PinShareInput = {
   streamId: Scalars['ID']['input'];
 };
 
+/** Что опубликовать */
+export type PublishStreamInput = {
+  /** Версия потока, которую видел пользователь; null — действовать по сохранённому сейчас */
+  expectedVersion?: InputMaybe<Scalars['Int']['input']>;
+  streamId: Scalars['ID']['input'];
+  /** Идентификатор новой задачи (UUID); повтор с ним же вернёт ту же задачу */
+  taskId: Scalars['ID']['input'];
+};
+
+export type PublishStreamResult = EmptyStream | StreamBusy | StreamConflict | StreamNotFound | Task | TaskKeyReused;
+
 /** Что было в Keitaro для оффера при последней загрузке или публикации */
 export type PublishedOffer = {
   __typename?: 'PublishedOffer';
@@ -228,6 +238,8 @@ export type Query = {
   serviceInfo: ServiceInfo;
   /** Потоки кампании в том виде, в каком они сохранены у нас, по порядку */
   streams: Array<Stream>;
+  /** Задача по идентификатору; null — такой нет */
+  task?: Maybe<Task>;
   /** Источники трафика */
   trafficSources: Array<TrafficSource>;
 };
@@ -251,6 +263,11 @@ export type QueryOffersArgs = {
 
 export type QueryStreamsArgs = {
   campaignId: Scalars['ID']['input'];
+};
+
+
+export type QueryTaskArgs = {
+  id: Scalars['ID']['input'];
 };
 
 /** Настройки сервиса, которые нужны интерфейсу */
@@ -285,8 +302,16 @@ export type Stream = {
   offers: Array<StreamOffer>;
   /** Порядковый номер в кампании */
   position: Scalars['Int']['output'];
+  /** Задача публикации, которая сейчас выполняется; пока она есть, поток занят */
+  publishingTaskId?: Maybe<Scalars['ID']['output']>;
   /** Номер записи потока: растёт при каждом изменении, возвращается обратно с действием */
   version: Scalars['Int']['output'];
+};
+
+/** Поток публикуется: до завершения задачи он не правится и не перезагружается */
+export type StreamBusy = {
+  __typename?: 'StreamBusy';
+  message: Scalars['String']['output'];
 };
 
 /** Поток изменён после того, как его показали пользователю; действие не применено */
@@ -327,13 +352,67 @@ export type StreamOfferInput = {
   streamId: Scalars['ID']['input'];
 };
 
-export type StreamResult = EmptyStream | KeitaroFailure | OfferAlreadyInStream | OfferNotFound | ShareOverflow | Stream | StreamConflict | StreamNotFound | ValidationFailed;
+export type StreamResult = KeitaroFailure | OfferAlreadyInStream | OfferNotFound | ShareOverflow | Stream | StreamBusy | StreamConflict | StreamNotFound | ValidationFailed;
 
 /** Потоки загружены из Keitaro и сохранены */
 export type StreamsFetched = {
   __typename?: 'StreamsFetched';
   campaign: Campaign;
   streams: Array<Stream>;
+};
+
+/** Изменение в Keitaro, которое выполняется отдельно от запроса */
+export type Task = {
+  __typename?: 'Task';
+  /** Сколько раз обработчик брался за задачу */
+  attempts: Scalars['Int']['output'];
+  campaignId?: Maybe<Scalars['ID']['output']>;
+  /** Время в ISO 8601 */
+  createdAt: Scalars['String']['output'];
+  finishedAt?: Maybe<Scalars['String']['output']>;
+  /** Идентификатор выдаёт клиент; он же ключ идемпотентности */
+  id: Scalars['ID']['output'];
+  kind: TaskKind;
+  /** Причина отказа; есть только у задачи со статусом REJECTED */
+  refusal?: Maybe<TaskRefusal>;
+  startedAt?: Maybe<Scalars['String']['output']>;
+  status: TaskStatus;
+  steps: Array<TaskStep>;
+  streamId?: Maybe<Scalars['ID']['output']>;
+};
+
+/** Этот идентификатор задачи уже использован для другого запроса */
+export type TaskKeyReused = {
+  __typename?: 'TaskKeyReused';
+  message: Scalars['String']['output'];
+};
+
+export type TaskKind =
+  | 'CREATE_CAMPAIGN'
+  | 'PUBLISH_STREAM';
+
+/** Почему задача завершилась отказом */
+export type TaskRefusal = {
+  __typename?: 'TaskRefusal';
+  /** Домен, который успел создаться до отказа и остался в трекере */
+  createdDomain?: Maybe<Domain>;
+  message: Scalars['String']['output'];
+};
+
+export type TaskStatus =
+  | 'CANCELLED'
+  | 'PENDING'
+  | 'REJECTED'
+  | 'RUNNING'
+  | 'SUCCEEDED';
+
+/** Что задача сделала, по порядку */
+export type TaskStep = {
+  __typename?: 'TaskStep';
+  /** Время в ISO 8601 */
+  at: Scalars['String']['output'];
+  name: Scalars['String']['output'];
+  note: Scalars['String']['output'];
 };
 
 /** Источник трафика */

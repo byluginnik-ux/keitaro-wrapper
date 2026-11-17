@@ -103,6 +103,9 @@ type Stream {
   """Номер записи потока: растёт при каждом изменении, возвращается обратно с действием"""
   version: Int!
 
+  """Задача публикации, которая сейчас выполняется; пока она есть, поток занят"""
+  publishingTaskId: ID
+
   """Офферы в порядке добавления; у потока-перенаправления список пуст"""
   offers: [StreamOffer!]!
 }
@@ -123,7 +126,17 @@ type CampaignNotFound {
   message: String!
 }
 
-union FetchStreamsResult = StreamsFetched | DraftNotPublished | CampaignNotFound | KeitaroFailure
+"""Поток публикуется: до завершения задачи он не правится и не перезагружается"""
+type StreamBusy {
+  message: String!
+}
+
+union FetchStreamsResult =
+  | StreamsFetched
+  | DraftNotPublished
+  | StreamBusy
+  | CampaignNotFound
+  | KeitaroFailure
 
 """У нас нет такого потока"""
 type StreamNotFound {
@@ -162,13 +175,90 @@ type StreamConflict {
 union StreamResult =
   | Stream
   | StreamConflict
+  | StreamBusy
   | StreamNotFound
   | OfferNotFound
   | OfferAlreadyInStream
   | ShareOverflow
-  | EmptyStream
   | ValidationFailed
   | KeitaroFailure
+
+enum TaskKind {
+  PUBLISH_STREAM
+  CREATE_CAMPAIGN
+}
+
+enum TaskStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  REJECTED
+  CANCELLED
+}
+
+"""Что задача сделала, по порядку"""
+type TaskStep {
+  name: String!
+
+  """Время в ISO 8601"""
+  at: String!
+  note: String!
+}
+
+"""Почему задача завершилась отказом"""
+type TaskRefusal {
+  message: String!
+
+  """Домен, который успел создаться до отказа и остался в трекере"""
+  createdDomain: Domain
+}
+
+"""Изменение в Keitaro, которое выполняется отдельно от запроса"""
+type Task {
+  """Идентификатор выдаёт клиент; он же ключ идемпотентности"""
+  id: ID!
+  kind: TaskKind!
+  status: TaskStatus!
+
+  """Сколько раз обработчик брался за задачу"""
+  attempts: Int!
+
+  """Время в ISO 8601"""
+  createdAt: String!
+  startedAt: String
+  finishedAt: String
+  campaignId: ID
+  streamId: ID
+
+  """Причина отказа; есть только у задачи со статусом REJECTED"""
+  refusal: TaskRefusal
+  steps: [TaskStep!]!
+}
+
+"""Этот идентификатор задачи уже использован для другого запроса"""
+type TaskKeyReused {
+  message: String!
+}
+
+# Поставленная задача публикации либо причина, по которой она не поставлена.
+union PublishStreamResult =
+  | Task
+  | StreamConflict
+  | StreamBusy
+  | StreamNotFound
+  | EmptyStream
+  | TaskKeyReused
+
+"""Что опубликовать"""
+input PublishStreamInput {
+  streamId: ID!
+
+  """Идентификатор новой задачи (UUID); повтор с ним же вернёт ту же задачу"""
+  taskId: ID!
+
+  """Версия потока, которую видел пользователь; null — действовать по сохранённому сейчас"""
+  expectedVersion: Int
+}
 
 """Оффер в потоке, над которым выполняется действие"""
 input StreamOfferInput {
@@ -270,6 +360,9 @@ type Query {
 
   """Потоки кампании в том виде, в каком они сохранены у нас, по порядку"""
   streams(campaignId: ID!): [Stream!]!
+
+  """Задача по идентификатору; null — такой нет"""
+  task(id: ID!): Task
 }
 
 type Mutation {
@@ -297,6 +390,6 @@ type Mutation {
   """Отменить черновик: поток возвращается к опубликованному снимку"""
   cancelDraft(streamId: ID!, expectedVersion: Int): StreamResult!
 
-  """Опубликовать черновик: отправить в Keitaro активные офферы потока с их долями"""
-  pushStream(streamId: ID!, expectedVersion: Int): StreamResult!
+  """Поставить задачу публикации: обработчик отправит в Keitaro активные офферы потока"""
+  publishStream(input: PublishStreamInput!): PublishStreamResult!
 }
