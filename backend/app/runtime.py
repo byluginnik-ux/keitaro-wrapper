@@ -138,7 +138,10 @@ async def open_runtime(settings: Settings) -> AsyncGenerator[Runtime]:
     ):
         runtime = assemble(settings, KeitaroClient(http), storage, bus, cache)
         if settings.message_bus != "memory":
-            yield runtime
+            try:
+                yield runtime
+            finally:
+                await runtime.relay.settle()  # what this process was sending on its own
             return
         await runtime.consume_tasks()
         sending = asyncio.create_task(runtime.relay.run(poll=settings.outbox_poll))

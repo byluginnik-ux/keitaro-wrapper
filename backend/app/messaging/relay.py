@@ -34,6 +34,9 @@ class Relay:
         self._batch = batch
         self._lease = lease
         self._wake = asyncio.Event()
+        self._looping = False
+        self._again = False
+        self._own: asyncio.Task[None] | None = None
 
     async def send_waiting(self) -> int:
         """Make one pass and tell how many messages left."""
@@ -49,16 +52,46 @@ class Relay:
             await self._storage.outbox.mark_sent(sent, self._clock())
         return len(sent)
 
+    def nudge(self) -> None:
+        """Tell the relay that something was just written; it need not wait for the next poll.
+
+        Where the loop runs, it is woken. Elsewhere this process sends what it wrote
+        itself, one pass at a time; the relay process is the safety net (R-EV-03).
+        """
+        self._wake.set()
+        if self._looping:
+            return
+        if self._own is None or self._own.done():
+            self._own = asyncio.create_task(self._send_own())
+        else:
+            self._again = True  # written after the running pass has claimed its rows
+
+    async def _send_own(self) -> None:
+        while True:
+            self._again = False
+            try:
+                while await self.send_waiting() >= self._batch:
+                    pass
+            except Exception:  # whoever wrote the message has been answered already
+                log.warning("sending right after the write failed; the relay will", exc_info=True)
+                return
+            if not self._again:
+                return
+
     async def settle(self) -> None:
         """Wait for whatever this process is sending on its own."""
-        raise NotImplementedError
-
-    def nudge(self) -> None:
-        """Tell the relay that something was just written; it need not wait for the next poll."""
-        self._wake.set()
+        if self._own is not None:
+            await self._own
 
     async def run(self, *, poll: float = 0.5) -> None:
         """Keep sending until cancelled; a failed pass is repeated after the pause."""
+        self._looping = True
+        try:
+            await self._loop(poll)
+        finally:
+            self._looping = False
+
+    async def _loop(self, poll: float) -> None:
         while True:
             self._wake.clear()
             try:
