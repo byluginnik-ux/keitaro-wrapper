@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "GraphQL backend for the Keitaro campaign creator and offer editor"
 requires-python = ">=3.13"
 dependencies = [
+    "aio-pika>=9.5",
     "alembic>=1.14",
     "asyncpg>=0.30",
     "fastapi>=0.115",

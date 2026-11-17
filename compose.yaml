@@ -100,6 +100,17 @@ services:
       - /data/db
     healthcheck: *mongo-health
 
+  rabbitmq-test:
+    image: rabbitmq:4-alpine
+    profiles: [test]
+    ports:
+      - "127.0.0.1:${TEST_RABBITMQ_PORT:-55672}:5672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
 volumes:
   db-data:
   mongo-data:
