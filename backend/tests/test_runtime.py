@@ -1,11 +1,13 @@
 """The whole way of a publication: request → outbox → bus → worker (R-EV-03, 07, 08)."""
 
+import logging
 from uuid import uuid4
 
 import pytest
 from pydantic import SecretStr
 
 from app.messaging.memory import MemoryBus
+from app.messaging.ports import Message
 from app.runtime import QUEUES, Runtime, assemble
 from app.services.creator import NewCampaignRequest
 from app.services.models import TaskStatus
@@ -109,3 +111,20 @@ async def test_queued_creation_makes_one_campaign_despite_a_lost_answer(
     assert (done.status, done.attempts) == (TaskStatus.SUCCEEDED, 2)
     assert len(keitaro.campaigns) == before + 1
     assert keitaro.calls["create_campaign"] == 1
+
+
+async def test_message_of_an_unknown_topic_is_reported_and_touches_nothing(
+    runtime: Runtime, keitaro: FakeKeitaro, caplog: pytest.LogCaptureFixture
+) -> None:
+    """R-EV-07: a message nobody is responsible for must not be taken for a publication."""
+    stray = Message(uuid4(), "stream.archive.requested", {"task_id": str(uuid4())})
+
+    with caplog.at_level(logging.ERROR, logger="app.runtime"):
+        await runtime._handle(stray)  # noqa: SLF001 — the entry the bus calls  # pyright: ignore[reportPrivateUsage]
+        await runtime._bury(stray)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+
+    assert [record.getMessage() for record in caplog.records] == [
+        "no handler for topic stream.archive.requested",
+        "no handler for topic stream.archive.requested",
+    ]
+    assert not keitaro.calls
