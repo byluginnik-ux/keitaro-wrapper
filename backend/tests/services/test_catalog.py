@@ -125,3 +125,18 @@ async def test_forgotten_domains_are_read_anew() -> None:
     await catalog.domains()
 
     assert keitaro.calls["list_domains"] == 2
+
+
+async def test_cached_list_is_parsed_once_while_its_text_is_the_same() -> None:
+    """R-CH-01: every keystroke in the offer field must not parse the whole list again."""
+    keitaro, clock = FakeKeitaro(), Clock()
+    catalog = CatalogService(keitaro, ttl=30, clock=clock)
+
+    first = await catalog.search_offers("offer b")
+    second = await catalog.search_offers("offer b")
+    keitaro.offers.append(Offer(id=77777, name="Offer New", state="active"))
+    clock.now = 31
+    third = await catalog.search_offers("offer")
+
+    assert first[0] is second[0]
+    assert "Offer New" in [offer.name for offer in third]
