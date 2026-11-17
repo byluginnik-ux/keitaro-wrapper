@@ -251,6 +251,7 @@ Admin API: база `{KEITARO_BASE_URL}/admin_api/v1`, заголовок `Api-K
 | R-EV-07 … R-EV-09 | F17 | `backend/tests/services/test_publisher.py`; путь через outbox и шину — `backend/tests/test_runtime.py` |
 | R-TK-06 … R-TK-09 | F19 | `backend/tests/services/test_tasks.py`, `backend/tests/graphql/test_tasks.py`, `frontend/tests/server/tasks.test.ts` |
 | R-UX-30 … R-UX-32 | F19 | `frontend/tests/app/tasks.test.ts`, `frontend/tests/e2e/tasks.spec.ts`; R-UX-32 — проверка в браузере |
+| R-OPS-01 … R-OPS-03 | F21 | проверка запуском стека: `docker compose up --build --scale worker=2` с поддельным трекером (см. README) |
 | R-UX-18 | F17 | `frontend/tests/app/editor.test.ts`, `frontend/tests/e2e/editor.spec.ts` |
 | R-UX-20 … R-UX-24 | F10a | `frontend/tests/app/tokens.test.ts`, `frontend/tests/app/ui.test.ts`; R-UX-21, 23, 24 — проверка в браузере (F12) |
 | R-ARCH-04, R-ARCH-05 | F10b | `frontend/tests/server/graphql.test.ts`, `frontend/tests/server/creator.test.ts`, `frontend/tests/server/editor.test.ts` |
@@ -312,3 +313,9 @@ Admin API: база `{KEITARO_BASE_URL}/admin_api/v1`, заголовок `Api-K
 - **R-EV-07.** Обработчик задачи идемпотентен: повторная доставка сообщения завершённой задачи ничего не делает; повторная доставка после обрыва (запись в Keitaro прошла, итог не записан) доводит задачу до того же итога.
 - **R-EV-08.** Сбой сети и ответ Keitaro 5xx — повод для новой попытки; отказ 4xx и исчерпание попыток завершают задачу отказом с причиной. Сообщение из очереди отказов тоже завершает свою задачу отказом: задача не остаётся висеть.
 - **R-EV-09.** Итог задачи публикуется событием: `stream.published` или `stream.publish.rejected` — в той же транзакции, что и запись итога.
+
+### 13.4. Эксплуатация
+
+- **R-OPS-01.** Стек `docker compose up` работает через RabbitMQ: веб-процесс только ставит задачи, отправитель outbox (`relay`) и обработчик (`worker`) — отдельные процессы из того же образа.
+- **R-OPS-02.** Обработчиков может быть несколько (`--scale worker=N`): задачу выполняет один из них, страница «Задачи» показывает их число. Остановленный обработчик задач не теряет: они ждут в очереди и выполняются после его запуска.
+- **R-OPS-03.** Процессы завершаются по SIGTERM без потери взятого сообщения: неподтверждённое возвращается в очередь.

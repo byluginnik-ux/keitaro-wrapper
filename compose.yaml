@@ -1,24 +1,54 @@
 # Наружу открыт только фронт. Бэкенд доступен BFF по внутренней сети (R-ARCH-04).
+# Веб-процесс ставит задачи; отправитель outbox и обработчик — отдельные процессы (R-OPS-01).
+x-backend: &backend
+  build:
+    context: .
+    dockerfile: backend/Dockerfile
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    STORAGE_BACKEND: ${STORAGE_BACKEND:-postgres}
+    DATABASE_URL: postgresql+asyncpg://keitaro:keitaro@db:5432/keitaro
+    MONGO_URL: mongodb://mongo:27017/?directConnection=true
+    MESSAGE_BUS: rabbitmq
+    RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+  depends_on: &backend-needs
+    migrate:
+      condition: service_completed_successfully
+    rabbitmq:
+      condition: service_healthy
+
 services:
   backend:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    env_file:
-      - path: .env
-        required: false
-    environment:
-      STORAGE_BACKEND: ${STORAGE_BACKEND:-postgres}
-      DATABASE_URL: postgresql+asyncpg://keitaro:keitaro@db:5432/keitaro
-      MONGO_URL: mongodb://mongo:27017/?directConnection=true
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
+    <<: *backend
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # Отправляет сообщения из outbox в шину (R-EV-03).
+  relay:
+    <<: *backend
+    command: ["/srv/backend/.venv/bin/python", "-m", "app.relay"]
+    restart: unless-stopped
+
+  # Выполняет задачи в Keitaro; масштабируется: docker compose up --scale worker=2 (R-OPS-02).
+  worker:
+    <<: *backend
+    command: ["/srv/backend/.venv/bin/python", "-m", "app.worker"]
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:4-alpine
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck: &rabbit-health
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
 
   # Применяет миграции Alembic перед стартом бэкенда и завершается.
   migrate:
@@ -105,12 +135,9 @@ services:
     profiles: [test]
     ports:
       - "127.0.0.1:${TEST_RABBITMQ_PORT:-55672}:5672"
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
-      interval: 3s
-      timeout: 5s
-      retries: 30
+    healthcheck: *rabbit-health
 
 volumes:
   db-data:
+  rabbitmq-data:
   mongo-data:
