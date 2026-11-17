@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest'
 import OfferRow from '../../app/components/editor/OfferRow.vue'
 import ShareBar from '../../app/components/editor/ShareBar.vue'
 import StreamCard from '../../app/components/editor/StreamCard.vue'
-import type { OfferView, StreamView } from '../../shared/types/api'
+import { followTask } from '../../app/composables/publication'
+import type { OfferView, StreamView, TaskView } from '../../shared/types/api'
 
 function offer(patch: Partial<OfferView> = {}): OfferView {
   return {
@@ -29,6 +30,8 @@ function stream(patch: Partial<StreamView> = {}): StreamView {
     position: 2,
     acceptsOffers: true,
     dirty: false,
+    version: 1,
+    publishingTaskId: null,
     changes: 0,
     total: 100,
     offers: [
@@ -294,5 +297,46 @@ describe('StreamCard', () => {
     expect(wrapper.findAll('button').every(item => item.attributes('disabled') !== undefined)).toBe(true)
     expect(button(wrapper, /Опубликовать/).attributes('aria-busy')).toBe('true')
     expect(button(wrapper, /Отменить/).attributes('aria-busy')).toBeUndefined()
+  })
+
+  it('shows a publication in progress and locks the stream (R-UX-18)', () => {
+    const wrapper = card({ dirty: true, changes: 1, publishingTaskId: 'task-1' })
+
+    expect(wrapper.find('[role="status"]').text()).toBe('Публикуется…')
+    expect(wrapper.text()).not.toContain('Не опубликовано')
+    expect(wrapper.findAll('button').every(item => item.attributes('disabled') !== undefined)).toBe(true)
+    expect(button(wrapper, /Опубликовать/).attributes('aria-busy')).toBe('true')
+  })
+})
+
+describe('following a task (R-UX-18)', () => {
+  const state = (status: TaskView['status'], finished: boolean) => ({ id: 'task-1', status, finished }) as TaskView
+  const wait = () => Promise.resolve()
+
+  it('asks until the task is finished and survives a failed question', async () => {
+    const answers = [state('pending', false), new Error('offline'), state('running', false), state('succeeded', true)]
+    const asked: string[] = []
+    const load = async (id: string) => {
+      asked.push(id)
+      const next = answers.shift()
+      if (next instanceof Error) throw next
+      return next as TaskView
+    }
+
+    const task = await followTask('task-1', { load, wait })
+
+    expect(task?.status).toBe('succeeded')
+    expect(asked).toEqual(['task-1', 'task-1', 'task-1', 'task-1'])
+  })
+
+  it('gives up when patience runs out', async () => {
+    let asked = 0
+    const load = async () => {
+      asked += 1
+      return state('running', false)
+    }
+
+    expect(await followTask('task-1', { load, wait, pause: 100, patience: 300 })).toBeNull()
+    expect(asked).toBe(4)
   })
 })

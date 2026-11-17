@@ -31,7 +31,9 @@ const emit = defineEmits<{
 }>()
 
 const picked = ref<Option<number> | null>(null)
-const locked = computed(() => Boolean(props.pending))
+/** A task is sending the stream to the tracker: nothing can be changed until it ends (R-UX-18). */
+const publishing = computed(() => props.pending === 'push')
+const locked = computed(() => Boolean(props.pending) || publishing.value)
 const taken = computed(() => props.stream.offers.map(offer => offer.offerId))
 const headingId = computed(() => `stream-${props.stream.id}`)
 
@@ -156,7 +158,7 @@ function add(option: Option<number> | null) {
           <UiButton
             variant="primary"
             :disabled="locked"
-            :busy="pending === 'push'"
+            :busy="publishing"
             @click="emit('command', { action: 'push' })"
           >
             Опубликовать

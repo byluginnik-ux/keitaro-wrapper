@@ -1,4 +1,4 @@
-import type { CampaignView, EditorScreen, StreamView } from '../../shared/types/api'
+import type { CampaignView, EditorScreen, StreamView, TaskView } from '../../shared/types/api'
 import type { StreamOutcomeFragment } from '../graphql/operations'
 import {
   AddOfferDocument,
@@ -139,7 +139,12 @@ export async function runStreamAction(
   }
 }
 
-/** Publication became a task (contract 0.8.0); the route is rebuilt with its tests. */
-export async function publishStream(_graphql: GraphqlClient, _input: StreamActionInput): Promise<StreamView> {
+/** Queue the publication of a stream; the answer is the task to follow (R-ED-20, R-TK-04). */
+export async function publishStream(_graphql: GraphqlClient, _input: StreamActionInput): Promise<TaskView> {
+  return fail(501, 'not_implemented', 'Публикация переводится на задачи')
+}
+
+/** How a task is doing (R-TK-05). */
+export async function loadTask(_graphql: GraphqlClient, _id: unknown): Promise<TaskView> {
   return fail(501, 'not_implemented', 'Публикация переводится на задачи')
 }

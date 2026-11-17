@@ -61,7 +61,28 @@ export function stream(extra: Record<string, unknown> = {}) {
     kind: 'landings',
     dirty: false,
     version: 3,
+    publishingTaskId: null,
     offers: [offer(1, 34), offer(2, 33), offer(3, 33)],
+    ...extra,
+  }
+}
+
+export const TASK_ID = '0b9d3c4e-6a55-4f0e-9d1f-2c1f6f3f8a10'
+
+export function task(extra: Record<string, unknown> = {}) {
+  return {
+    __typename: 'Task',
+    id: TASK_ID,
+    kind: 'PUBLISH_STREAM',
+    status: 'PENDING',
+    attempts: 0,
+    createdAt: '2026-11-17T12:00:00+00:00',
+    startedAt: null,
+    finishedAt: null,
+    campaignId: 'c-1',
+    streamId: 's-2',
+    refusal: null,
+    steps: [{ name: 'queued', at: '2026-11-17T12:00:00+00:00', note: '' }],
     ...extra,
   }
 }

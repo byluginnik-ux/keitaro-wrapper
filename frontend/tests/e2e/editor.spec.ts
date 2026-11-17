@@ -38,6 +38,28 @@ test('S3: publishing sends the draft to the tracker', async ({ page, request }) 
   await expect(offerRow(page, 'Offer D')).not.toContainText('Новый')
 })
 
+test('a publication in progress is shown and locks the stream (R-UX-18)', async ({ page, request }) => {
+  await openCampaign(page, await makeCampaign(request))
+  await addOffer(page, 'offer d', 'Offer D')
+  // hold the answer about the task, so the state in between can be seen
+  let release = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await page.route('**/api/tasks/*', async (route) => {
+    await held
+    await route.continue()
+  })
+
+  await page.getByRole('button', { name: 'Опубликовать' }).click()
+
+  await expect(flow(page, 'Flow 2').getByRole('status')).toHaveText('Публикуется…')
+  await expect(page.getByRole('button', { name: 'Удалить Offer A' })).toBeDisabled()
+  release()
+  await expectDraft(page, false)
+  await expect(flow(page, 'Flow 2').getByRole('status')).toHaveCount(0)
+})
+
 test('S4: cancelling returns the stream to what is published', async ({ page, request }) => {
   await openCampaign(page, await makeCampaign(request))
   await addOffer(page, 'offer d', 'Offer D')

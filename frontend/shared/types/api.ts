@@ -59,6 +59,8 @@ export interface StreamView {
   dirty: boolean
   /** The number of the stream's last write; every action sends it back (R-CC-06). */
   version: number
+  /** The unfinished task that publishes the stream; while it is set, the stream is locked (R-UX-18). */
+  publishingTaskId: string | null
   /** How many offers a publication would change. */
   changes: number
   /** Sum of the shares of active offers, as stored. */
@@ -69,4 +71,30 @@ export interface StreamView {
 export interface EditorScreen {
   campaign: CampaignView
   streams: StreamView[]
+}
+
+export type TaskStatus = 'pending' | 'running' | 'succeeded' | 'rejected' | 'cancelled'
+
+export interface TaskStepView {
+  name: string
+  at: string
+  note: string
+}
+
+/** A change of the tracker that is carried out apart from the request (R-TK-05). */
+export interface TaskView {
+  id: string
+  kind: 'publish_stream' | 'create_campaign'
+  status: TaskStatus
+  /** Nothing more will happen to the task. */
+  finished: boolean
+  attempts: number
+  createdAt: string
+  startedAt: string | null
+  finishedAt: string | null
+  campaignId: string | null
+  streamId: string | null
+  /** Why the task was rejected, in words for the user. */
+  refusal: string | null
+  steps: TaskStepView[]
 }

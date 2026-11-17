@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { fetchStreams, listCampaigns, loadEditor, runStreamAction } from '../../server/utils/editor'
-import { CAMPAIGN, fakeBackend, offer, refusal, stream } from './support'
+import { fetchStreams, listCampaigns, loadEditor, loadTask, publishStream, runStreamAction } from '../../server/utils/editor'
+import { CAMPAIGN, TASK_ID, fakeBackend, offer, refusal, stream, task } from './support'
 
 const INFO = { trackerUrl: 'https://tracker.test' }
 const LINK = 'https://tracker.test/admin/#!/campaigns/93212'
@@ -41,6 +41,7 @@ describe('editor screen', () => {
       acceptsOffers: false,
       dirty: false,
       version: 3,
+      publishingTaskId: null,
       changes: 0,
       total: 0,
       offers: [],
@@ -122,21 +123,18 @@ describe('stream actions', () => {
     expect(view).toMatchObject({ id: 's-2', dirty: true, total: 100, version: 3 })
   })
 
-  it.each([
-    ['cancel', 'CancelDraft'],
-    ['push', 'PushStream'],
-  ] as const)('%s calls %s with the version the user saw (R-CC-06)', async (action, operation) => {
-    const { graphql, calls } = fakeBackend({ [operation]: answer })
+  it('cancel calls CancelDraft with the version the user saw (R-CC-06)', async () => {
+    const { graphql, calls } = fakeBackend({ CancelDraft: answer })
 
-    await runStreamAction(graphql, action, { streamId: 's-2', version: '3' })
+    await runStreamAction(graphql, 'cancel', { streamId: 's-2', version: '3' })
 
-    expect(calls).toEqual([{ operation, variables: { streamId: 's-2', expectedVersion: 3 } }])
+    expect(calls).toEqual([{ operation: 'CancelDraft', variables: { streamId: 's-2', expectedVersion: 3 } }])
   })
 
   it('acts on what is stored when no version came', async () => {
-    const { graphql, calls } = fakeBackend({ PushStream: answer })
+    const { graphql, calls } = fakeBackend({ CancelDraft: answer })
 
-    await runStreamAction(graphql, 'push', { streamId: 's-2' })
+    await runStreamAction(graphql, 'cancel', { streamId: 's-2' })
 
     expect(calls[0]?.variables).toEqual({ streamId: 's-2' })
   })
@@ -162,12 +160,12 @@ describe('stream actions', () => {
     ['OfferNotFound', 404, 'offer_not_found'],
     ['OfferAlreadyInStream', 409, 'offer_already_in_stream'],
     ['ShareOverflow', 422, 'share_overflow'],
-    ['EmptyStream', 422, 'empty_stream'],
+    ['StreamBusy', 409, 'stream_busy'],
     ['KeitaroFailure', 502, 'keitaro_failure'],
   ])('maps %s to %i', async (typename, status, code) => {
-    const { graphql } = fakeBackend({ PushStream: { result: { __typename: typename, message: 'почему' } } })
+    const { graphql } = fakeBackend({ CancelDraft: { result: { __typename: typename, message: 'почему' } } })
 
-    expect(await refusal(runStreamAction(graphql, 'push', { streamId: 's-2' }))).toEqual({
+    expect(await refusal(runStreamAction(graphql, 'cancel', { streamId: 's-2' }))).toEqual({
       status,
       body: { code, message: 'почему' },
     })
@@ -192,8 +190,8 @@ describe('stream actions', () => {
     ['add', { streamId: 's-2', body: { offerId: 'four' } }],
     ['pin', { streamId: 's-2', offerId: 4, body: { share: '25%' } }],
     ['remove', { streamId: 's-2', offerId: 'x' }],
-    ['push', { streamId: '' }],
-    ['push', { streamId: 's-2', version: 'latest' }],
+    ['cancel', { streamId: '' }],
+    ['cancel', { streamId: 's-2', version: 'latest' }],
   ] as const)('rejects malformed %s %j without asking the backend', async (action, input) => {
     const { graphql, calls } = fakeBackend({})
 
@@ -210,5 +208,92 @@ describe('stream actions', () => {
     await runStreamAction(graphql, 'pin', { streamId: 's-2', offerId: 4, body: { share: 250 } })
 
     expect(calls[0]?.variables).toMatchObject({ input: { streamId: 's-2', offerId: 4, share: 250 } })
+  })
+})
+
+describe('publication', () => {
+  const queued = {
+    id: TASK_ID,
+    kind: 'publish_stream',
+    status: 'pending',
+    finished: false,
+    attempts: 0,
+    createdAt: '2026-11-17T12:00:00+00:00',
+    startedAt: null,
+    finishedAt: null,
+    campaignId: 'c-1',
+    streamId: 's-2',
+    refusal: null,
+    steps: [{ name: 'queued', at: '2026-11-17T12:00:00+00:00', note: '' }],
+  }
+
+  it('queues a task with the ID the browser made and answers with the task (R-ED-20, R-TK-04)', async () => {
+    const { graphql, calls } = fakeBackend({ PublishStream: { result: task() } })
+
+    const view = await publishStream(graphql, { streamId: 's-2', version: '3', body: { taskId: TASK_ID } })
+
+    expect(calls).toEqual([{
+      operation: 'PublishStream',
+      variables: { input: { streamId: 's-2', taskId: TASK_ID, expectedVersion: 3 } },
+    }])
+    expect(view).toEqual(queued)
+  })
+
+  it('tells how a task is doing and why it was rejected (R-TK-05)', async () => {
+    const rejected = task({
+      status: 'REJECTED',
+      attempts: 3,
+      finishedAt: '2026-11-17T12:00:09+00:00',
+      refusal: { message: 'Keitaro ответил 502', createdDomain: null },
+    })
+    const { graphql, calls } = fakeBackend({ TaskState: { task: rejected } })
+
+    const view = await loadTask(graphql, TASK_ID)
+
+    expect(calls).toEqual([{ operation: 'TaskState', variables: { id: TASK_ID } }])
+    expect(view).toMatchObject({ status: 'rejected', finished: true, attempts: 3, refusal: 'Keitaro ответил 502' })
+  })
+
+  it('answers 404 for a task nobody queued', async () => {
+    const { graphql } = fakeBackend({ TaskState: { task: null } })
+
+    expect(await refusal(loadTask(graphql, TASK_ID))).toMatchObject({ status: 404, body: { code: 'task_not_found' } })
+  })
+
+  it('answers a conflict with the stream as it is now (R-CC-06)', async () => {
+    const current = stream({ dirty: true, version: 4 })
+    const { graphql } = fakeBackend({
+      PublishStream: { result: { __typename: 'StreamConflict', message: 'Поток изменён', stream: current } },
+    })
+
+    const { status, body } = await refusal(publishStream(graphql, { streamId: 's-2', version: 3, body: { taskId: TASK_ID } }))
+
+    expect(status).toBe(409)
+    expect(body.stream).toMatchObject({ id: 's-2', version: 4 })
+  })
+
+  it.each([
+    ['StreamBusy', 409, 'stream_busy'],
+    ['StreamNotFound', 404, 'stream_not_found'],
+    ['EmptyStream', 422, 'empty_stream'],
+    ['TaskKeyReused', 409, 'task_key_reused'],
+  ])('maps %s to %i', async (typename, status, code) => {
+    const { graphql } = fakeBackend({ PublishStream: { result: { __typename: typename, message: 'почему' } } })
+
+    expect(await refusal(publishStream(graphql, { streamId: 's-2', body: { taskId: TASK_ID } }))).toEqual({
+      status,
+      body: { code, message: 'почему' },
+    })
+  })
+
+  it.each([
+    [{ streamId: 's-2' }],
+    [{ streamId: 's-2', body: { taskId: 'not-a-uuid' } }],
+    [{ streamId: '', body: { taskId: TASK_ID } }],
+  ])('rejects malformed %j without asking the backend', async (input) => {
+    const { graphql, calls } = fakeBackend({})
+
+    expect((await refusal(publishStream(graphql, input))).status).toBe(400)
+    expect(calls).toHaveLength(0)
   })
 })

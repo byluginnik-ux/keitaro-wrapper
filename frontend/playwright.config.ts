@@ -27,7 +27,8 @@ export default defineConfig({
     {
       command: 'uv run uvicorn --factory app.main:create_app --port 8792 --log-level warning',
       cwd: '../backend',
-      env: { KEITARO_BASE_URL: TRACKER, KEITARO_API_KEY: 'fake-key', STORAGE_BACKEND: 'memory' },
+      // a failing tracker is retried: keep the pauses between attempts short
+      env: { KEITARO_BASE_URL: TRACKER, KEITARO_API_KEY: 'fake-key', STORAGE_BACKEND: 'memory', TASK_RETRY_DELAY: '0.1' },
       url: `${BACKEND}/health`,
       reuseExistingServer: false,
     },

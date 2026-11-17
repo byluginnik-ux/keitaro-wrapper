@@ -26,6 +26,10 @@ export const fetchInput = v.object({ keitaroId: idLike })
 const seen = v.optional(idLike)
 export const streamRef = v.object({ streamId: text, version: seen })
 export const offerRef = v.object({ streamId: text, offerId: idLike, version: seen })
+/** The ID of a task is made by the browser, so a repeat of the request carries the same one (R-TK-04). */
+const taskId = v.pipe(v.string(), v.uuid())
+export const taskBody = v.object({ taskId })
+export const taskRef = v.object({ taskId })
 export const offerBody = v.object({ offerId: id })
 /** The range of a share is a rule of the domain, so only the type is checked here. */
 export const shareBody = v.object({ share: v.pipe(v.number(), v.integer()) })

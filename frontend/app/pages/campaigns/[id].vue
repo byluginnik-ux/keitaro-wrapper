@@ -2,7 +2,8 @@
 import type { StreamCommand } from '../../components/editor/StreamCard.vue'
 import { api, toApiError } from '../../composables/api'
 import type { ApiRequest } from '../../composables/api'
-import type { EditorScreen, Option, StreamView } from '../../../shared/types/api'
+import { followTask } from '../../composables/publication'
+import type { EditorScreen, Option, StreamView, TaskView } from '../../../shared/types/api'
 
 const route = useRoute()
 const campaignId = String(route.params.id)
@@ -21,6 +22,8 @@ const searching = ref<Record<string, boolean>>({})
 const syncing = ref(false)
 const syncError = ref<string | null>(null)
 const lastSearch: Record<string, number> = {}
+/** The task ID of a publication lives until its request gets through, so a repeat is the same task (R-TK-04). */
+const taskIds = new Map<string, string>()
 
 function request(streamId: string, command: StreamCommand): [string, ApiRequest] {
   const stream = `/api/streams/${streamId}`
@@ -31,7 +34,11 @@ function request(streamId: string, command: StreamCommand): [string, ApiRequest]
     case 'pin': return [`${stream}/offers/${command.offerId}/pin`, { method: 'PUT', body: { share: command.share } }]
     case 'unpin': return [`${stream}/offers/${command.offerId}/pin`, { method: 'DELETE' }]
     case 'cancel': return [`${stream}/cancel`, { method: 'POST' }]
-    case 'push': return [`${stream}/push`, { method: 'POST' }]
+    case 'push': {
+      const taskId = taskIds.get(streamId) ?? crypto.randomUUID()
+      taskIds.set(streamId, taskId)
+      return [`${stream}/push`, { method: 'POST', body: { taskId } }]
+    }
   }
 }
 
@@ -53,16 +60,49 @@ async function run(streamId: string, command: StreamCommand) {
   try {
     const [url, options] = request(streamId, command)
     const version = screen.value.streams.find(stream => stream.id === streamId)?.version
-    show(await api<StreamView>(url, version === undefined ? options : { ...options, query: { version } }))
+    const versioned = version === undefined ? options : { ...options, query: { version } }
+    if (command.action === 'push') await publish(streamId, await api<TaskView>(url, versioned))
+    else show(await api<StreamView>(url, versioned))
   }
   catch (error) {
     const refusal = toApiError(error)
+    // the request was answered: the next publication is a new task
+    if (refusal.code !== 'network') taskIds.delete(streamId)
     // Another window changed the stream: show what it is now, next to the reason (R-UX-17).
     if (refusal.stream) show(refusal.stream)
     errors.value = { ...errors.value, [streamId]: refusal.message }
   }
   finally {
     const { [streamId]: _done, ...rest } = pending.value
+    pending.value = rest
+  }
+}
+
+/** The publication was queued: wait for its end and show what became of the stream (R-UX-18). */
+async function publish(streamId: string, queued: TaskView) {
+  taskIds.delete(streamId)
+  const task = queued.finished
+    ? queued
+    : await followTask(queued.id, { load: id => api<TaskView>(`/api/tasks/${id}`) })
+  const fresh = await api<EditorScreen>(`/api/campaigns/${campaignId}/editor`)
+  const stream = fresh.streams.find(item => item.id === streamId)
+  if (stream) show(stream)
+  if (!task) errors.value = { ...errors.value, [streamId]: 'Публикация ещё выполняется. Обновите страницу позже.' }
+  else if (task.status === 'rejected') errors.value = { ...errors.value, [streamId]: task.refusal ?? 'Публикация отклонена' }
+}
+
+/** A publication that was running when the page opened is followed to its end too. */
+async function resume(stream: StreamView) {
+  if (!stream.publishingTaskId || pending.value[stream.id]) return
+  pending.value = { ...pending.value, [stream.id]: 'push' }
+  try {
+    await publish(stream.id, await api<TaskView>(`/api/tasks/${stream.publishingTaskId}`))
+  }
+  catch (error) {
+    errors.value = { ...errors.value, [stream.id]: toApiError(error).message }
+  }
+  finally {
+    const { [stream.id]: _done, ...rest } = pending.value
     pending.value = rest
   }
 }
@@ -101,7 +141,10 @@ async function sync() {
   }
 }
 
-onMounted(() => screen.value?.streams.filter(stream => stream.acceptsOffers).forEach(stream => searchOffers(stream.id, '')))
+onMounted(() => {
+  screen.value?.streams.filter(stream => stream.acceptsOffers).forEach(stream => searchOffers(stream.id, ''))
+  screen.value?.streams.forEach(stream => resume(stream))
+})
 </script>
 
 <template>
