@@ -244,6 +244,8 @@ def to_queue_status(summary: QueueSummary) -> gql.QueueStatus:
 type TaskRefusalAnswer = (
     gql.TaskNotFound
     | gql.TaskNotRetryable
+    | gql.ValidationFailed
+    | gql.KeitaroFailure
     | gql.StreamBusy
     | gql.StreamNotFound
     | gql.EmptyStream
@@ -262,6 +264,10 @@ NOT_STEERED = {
 
 def to_task_refusal(error: DomainError) -> TaskRefusalAnswer:
     """Turn the reason a task was not repeated into its member of RetryTaskResult."""
+    if isinstance(error, ValidationError):
+        return to_validation_failed(error)
+    if isinstance(error, KeitaroError):
+        return to_keitaro_failure(error)
     for kind, answer in NOT_STEERED.items():
         if isinstance(error, kind):
             return answer(message=str(error))

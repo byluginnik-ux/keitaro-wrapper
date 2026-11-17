@@ -138,7 +138,7 @@ class TaskNotRetryableError(DomainError):
     code = "task_not_retryable"
 
     def __init__(self) -> None:
-        super().__init__("Повторить можно только отклонённую публикацию")
+        super().__init__("Повторить можно только отклонённую задачу, у которой сохранён запрос")
 
 
 class StreamConflictError(DomainError):

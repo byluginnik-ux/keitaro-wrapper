@@ -146,10 +146,12 @@ def _same(known: Task, fingerprint: str) -> Task:
     return known
 
 
-def _described(plan: _Plan, alias: str) -> Payload:
+def _described(request: NewCampaignRequest, plan: _Plan, alias: str) -> Payload:
     """Put the checked request into the task, so the worker needs nothing else (R-CR-13)."""
     domain = {"id": plan.domain.id, "name": plan.domain.name} if plan.domain else None
     return {
+        # kept as it was sent, so a rejected creation can be queued again (R-TK-09)
+        "request": asdict(request),
         "plan": {
             "name": plan.name,
             "country": plan.country,
@@ -188,7 +190,9 @@ class CreatorService:
         self._max_attempts = max_attempts
         self._announce = announce
 
-    async def request(self, request: NewCampaignRequest, task_id: UUID) -> Task:
+    async def request(
+        self, request: NewCampaignRequest, task_id: UUID, *, retry_of: UUID | None = None
+    ) -> Task:
         """Check the form and queue the creation; nothing is written to the tracker (R-CR-13)."""
         fingerprint = _fingerprint(request)
         known = await self._storage.tasks.get(task_id)
@@ -201,8 +205,9 @@ class CreatorService:
             kind=TaskKind.CREATE_CAMPAIGN,
             created_at=now,
             fingerprint=fingerprint,
-            payload=_described(plan, self._new_alias()),
+            payload=_described(request, plan, self._new_alias()),
             steps=(TaskStep("queued", now),),
+            retry_of=retry_of,
         )
         try:
             async with self._storage.transaction() as work:

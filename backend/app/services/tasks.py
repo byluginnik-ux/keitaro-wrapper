@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 from app.messaging.ports import MessageBus, QueueStats
-from app.services.creator import CreatorService, utc_now
+from app.services.creator import CreatorService, NewCampaignRequest, utc_now
 from app.services.errors import (
     TaskNotCancellableError,
     TaskNotFoundError,
@@ -87,11 +87,16 @@ class TasksService:
         return cancelled
 
     async def retry(self, task_id: UUID, new_task_id: UUID) -> Task:
-        """Queue the rejected publication again as a new task (R-TK-09)."""
+        """Queue the rejected work again as a new task (R-TK-09)."""
         task = await self._storage.tasks.get(task_id)
         if task is None:
             raise TaskNotFoundError
-        retryable = task.kind is TaskKind.PUBLISH_STREAM and task.status is TaskStatus.REJECTED
-        if not retryable or task.stream_id is None:
+        if task.status is not TaskStatus.REJECTED:
             raise TaskNotRetryableError
-        return await self._publisher.request(task.stream_id, new_task_id, retry_of=task.id)
+        if task.kind is TaskKind.PUBLISH_STREAM and task.stream_id is not None:
+            return await self._publisher.request(task.stream_id, new_task_id, retry_of=task.id)
+        sent = task.payload.get("request")
+        if task.kind is TaskKind.CREATE_CAMPAIGN and sent is not None:
+            request = NewCampaignRequest(**sent)
+            return await self._creator.request(request, new_task_id, retry_of=task.id)
+        raise TaskNotRetryableError

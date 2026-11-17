@@ -183,7 +183,7 @@ function time(iso: string | null) {
             {{ errors[task.id] }}
           </UiNotice>
           <div
-            v-if="task.status === 'pending' || (task.status === 'rejected' && task.kind === 'publish_stream')"
+            v-if="task.status === 'pending' || task.status === 'rejected'"
             class="task__actions"
           >
             <UiButton
