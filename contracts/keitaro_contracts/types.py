@@ -216,6 +216,9 @@ class Task:
     finished_at: str | None
     campaign_id: strawberry.ID | None
     stream_id: strawberry.ID | None
+    retry_of: strawberry.ID | None = strawberry.field(
+        description="Отклонённая задача, которую повторяет эта"
+    )
     refusal: TaskRefusal | None = strawberry.field(
         description="Причина отказа; есть только у задачи со статусом REJECTED"
     )
@@ -225,6 +228,52 @@ class Task:
 @strawberry.type(description="Этот идентификатор задачи уже использован для другого запроса")
 class TaskKeyReused:
     message: str
+
+
+@strawberry.type
+class TaskNotFound:
+    message: str
+
+
+@strawberry.type(description="Отменить можно только задачу, за которую обработчик ещё не взялся")
+class TaskNotCancellable:
+    message: str
+
+
+@strawberry.type(description="Повторить можно только отклонённую публикацию")
+class TaskNotRetryable:
+    message: str
+
+
+@strawberry.input(description="Что повторить")
+class RetryTaskInput:
+    task_id: strawberry.ID = strawberry.field(description="Отклонённая задача")
+    new_task_id: strawberry.ID = strawberry.field(
+        description="Идентификатор новой задачи (UUID); повтор с ним же вернёт ту же задачу"
+    )
+
+
+@strawberry.type(description="Сколько задач в одном статусе")
+class TaskCount:
+    status: TaskStatus
+    count: int
+
+
+@strawberry.type(description="Очередь шины сообщений")
+class QueueState:
+    name: str
+    ready: int = strawberry.field(description="Сколько сообщений ждёт обработчика")
+    consumers: int = strawberry.field(description="Сколько обработчиков слушает очередь")
+
+
+@strawberry.type(description="Состояние событийной части: задачи, исходящие сообщения, очереди")
+class QueueStatus:
+    tasks: list[TaskCount] = strawberry.field(description="Только статусы, в которых есть задачи")
+    outbox_waiting: int = strawberry.field(description="Сообщения, которые ещё не ушли в шину")
+    outbox_oldest: str | None = strawberry.field(
+        description="Когда записано самое старое из них, ISO 8601"
+    )
+    queues: list[QueueState]
 
 
 @strawberry.input(description="Что опубликовать")
@@ -315,4 +364,19 @@ CreateCampaignResult = Annotated[
 PublishStreamResult = Annotated[
     Task | StreamConflict | StreamBusy | StreamNotFound | EmptyStream | TaskKeyReused,
     strawberry.union(name="PublishStreamResult"),
+]
+
+CancelTaskResult = Annotated[
+    Task | TaskNotFound | TaskNotCancellable, strawberry.union(name="CancelTaskResult")
+]
+
+RetryTaskResult = Annotated[
+    Task
+    | TaskNotFound
+    | TaskNotRetryable
+    | StreamBusy
+    | StreamNotFound
+    | EmptyStream
+    | TaskKeyReused,
+    strawberry.union(name="RetryTaskResult"),
 ]

@@ -230,6 +230,9 @@ type Task {
   campaignId: ID
   streamId: ID
 
+  """Отклонённая задача, которую повторяет эта"""
+  retryOf: ID
+
   """Причина отказа; есть только у задачи со статусом REJECTED"""
   refusal: TaskRefusal
   steps: [TaskStep!]!
@@ -238,6 +241,71 @@ type Task {
 """Этот идентификатор задачи уже использован для другого запроса"""
 type TaskKeyReused {
   message: String!
+}
+
+type TaskNotFound {
+  message: String!
+}
+
+"""Отменить можно только задачу, за которую обработчик ещё не взялся"""
+type TaskNotCancellable {
+  message: String!
+}
+
+"""Повторить можно только отклонённую публикацию"""
+type TaskNotRetryable {
+  message: String!
+}
+
+union CancelTaskResult = Task | TaskNotFound | TaskNotCancellable
+
+# Новая задача публикации либо причина, по которой она не поставлена.
+union RetryTaskResult =
+  | Task
+  | TaskNotFound
+  | TaskNotRetryable
+  | StreamBusy
+  | StreamNotFound
+  | EmptyStream
+  | TaskKeyReused
+
+"""Что повторить"""
+input RetryTaskInput {
+  """Отклонённая задача"""
+  taskId: ID!
+
+  """Идентификатор новой задачи (UUID); повтор с ним же вернёт ту же задачу"""
+  newTaskId: ID!
+}
+
+"""Сколько задач в одном статусе"""
+type TaskCount {
+  status: TaskStatus!
+  count: Int!
+}
+
+"""Очередь шины сообщений"""
+type QueueState {
+  name: String!
+
+  """Сколько сообщений ждёт обработчика"""
+  ready: Int!
+
+  """Сколько обработчиков слушает очередь"""
+  consumers: Int!
+}
+
+"""Состояние событийной части: задачи, исходящие сообщения, очереди"""
+type QueueStatus {
+  """Только статусы, в которых есть задачи"""
+  tasks: [TaskCount!]!
+
+  """Сообщения, которые ещё не ушли в шину"""
+  outboxWaiting: Int!
+
+  """Когда записано самое старое из них, ISO 8601"""
+  outboxOldest: String
+  queues: [QueueState!]!
 }
 
 # Поставленная задача публикации либо причина, по которой она не поставлена.
@@ -363,6 +431,12 @@ type Query {
 
   """Задача по идентификатору; null — такой нет"""
   task(id: ID!): Task
+
+  """Задачи, сначала новые; без статусов — все"""
+  tasks(statuses: [TaskStatus!], kind: TaskKind, first: Int! = 50): [Task!]!
+
+  """Состояние событийной части"""
+  queueStatus: QueueStatus!
 }
 
 type Mutation {
@@ -392,4 +466,10 @@ type Mutation {
 
   """Поставить задачу публикации: обработчик отправит в Keitaro активные офферы потока"""
   publishStream(input: PublishStreamInput!): PublishStreamResult!
+
+  """Отменить задачу, за которую обработчик ещё не взялся; поток освобождается"""
+  cancelTask(id: ID!): CancelTaskResult!
+
+  """Повторить отклонённую публикацию новой задачей"""
+  retryTask(input: RetryTaskInput!): RetryTaskResult!
 }

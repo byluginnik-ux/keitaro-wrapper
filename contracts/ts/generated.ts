@@ -30,6 +30,8 @@ export type CampaignNotFound = {
   message: Scalars['String']['output'];
 };
 
+export type CancelTaskResult = Task | TaskNotCancellable | TaskNotFound;
+
 /** Страна ISO 3166-1 */
 export type Country = {
   __typename?: 'Country';
@@ -108,6 +110,8 @@ export type Mutation = {
   bringBackOffer: StreamResult;
   /** Отменить черновик: поток возвращается к опубликованному снимку */
   cancelDraft: StreamResult;
+  /** Отменить задачу, за которую обработчик ещё не взялся; поток освобождается */
+  cancelTask: CancelTaskResult;
   /** Создать кампанию: поток 1 уводит страну на Google, поток 2 ведёт на оффер */
   createCampaign: CreateCampaignResult;
   /** Загрузить потоки кампании из Keitaro по её ID в трекере и сверить с сохранёнными */
@@ -118,6 +122,8 @@ export type Mutation = {
   publishStream: PublishStreamResult;
   /** Убрать оффер из черновика: он остаётся в потоке со статусом REMOVED и долей 0 */
   removeOffer: StreamResult;
+  /** Повторить отклонённую публикацию новой задачей */
+  retryTask: RetryTaskResult;
   /** Снять закрепление; оффер снова участвует в пересчёте */
   unpinShare: StreamResult;
 };
@@ -136,6 +142,11 @@ export type MutationBringBackOfferArgs = {
 export type MutationCancelDraftArgs = {
   expectedVersion?: InputMaybe<Scalars['Int']['input']>;
   streamId: Scalars['ID']['input'];
+};
+
+
+export type MutationCancelTaskArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -161,6 +172,11 @@ export type MutationPublishStreamArgs = {
 
 export type MutationRemoveOfferArgs = {
   input: StreamOfferInput;
+};
+
+
+export type MutationRetryTaskArgs = {
+  input: RetryTaskInput;
 };
 
 
@@ -234,12 +250,16 @@ export type Query = {
   groups: Array<Group>;
   /** Активные офферы: поиск по фрагменту названия или началу ID */
   offers: Array<Offer>;
+  /** Состояние событийной части */
+  queueStatus: QueueStatus;
   /** Настройки сервиса, которые нужны интерфейсу */
   serviceInfo: ServiceInfo;
   /** Потоки кампании в том виде, в каком они сохранены у нас, по порядку */
   streams: Array<Stream>;
   /** Задача по идентификатору; null — такой нет */
   task?: Maybe<Task>;
+  /** Задачи, сначала новые; без статусов — все */
+  tasks: Array<Task>;
   /** Источники трафика */
   trafficSources: Array<TrafficSource>;
 };
@@ -269,6 +289,45 @@ export type QueryStreamsArgs = {
 export type QueryTaskArgs = {
   id: Scalars['ID']['input'];
 };
+
+
+export type QueryTasksArgs = {
+  first?: Scalars['Int']['input'];
+  kind?: InputMaybe<TaskKind>;
+  statuses?: InputMaybe<Array<TaskStatus>>;
+};
+
+/** Очередь шины сообщений */
+export type QueueState = {
+  __typename?: 'QueueState';
+  /** Сколько обработчиков слушает очередь */
+  consumers: Scalars['Int']['output'];
+  name: Scalars['String']['output'];
+  /** Сколько сообщений ждёт обработчика */
+  ready: Scalars['Int']['output'];
+};
+
+/** Состояние событийной части: задачи, исходящие сообщения, очереди */
+export type QueueStatus = {
+  __typename?: 'QueueStatus';
+  /** Когда записано самое старое из них, ISO 8601 */
+  outboxOldest?: Maybe<Scalars['String']['output']>;
+  /** Сообщения, которые ещё не ушли в шину */
+  outboxWaiting: Scalars['Int']['output'];
+  queues: Array<QueueState>;
+  /** Только статусы, в которых есть задачи */
+  tasks: Array<TaskCount>;
+};
+
+/** Что повторить */
+export type RetryTaskInput = {
+  /** Идентификатор новой задачи (UUID); повтор с ним же вернёт ту же задачу */
+  newTaskId: Scalars['ID']['input'];
+  /** Отклонённая задача */
+  taskId: Scalars['ID']['input'];
+};
+
+export type RetryTaskResult = EmptyStream | StreamBusy | StreamNotFound | Task | TaskKeyReused | TaskNotFound | TaskNotRetryable;
 
 /** Настройки сервиса, которые нужны интерфейсу */
 export type ServiceInfo = {
@@ -375,10 +434,19 @@ export type Task = {
   kind: TaskKind;
   /** Причина отказа; есть только у задачи со статусом REJECTED */
   refusal?: Maybe<TaskRefusal>;
+  /** Отклонённая задача, которую повторяет эта */
+  retryOf?: Maybe<Scalars['ID']['output']>;
   startedAt?: Maybe<Scalars['String']['output']>;
   status: TaskStatus;
   steps: Array<TaskStep>;
   streamId?: Maybe<Scalars['ID']['output']>;
+};
+
+/** Сколько задач в одном статусе */
+export type TaskCount = {
+  __typename?: 'TaskCount';
+  count: Scalars['Int']['output'];
+  status: TaskStatus;
 };
 
 /** Этот идентификатор задачи уже использован для другого запроса */
@@ -390,6 +458,23 @@ export type TaskKeyReused = {
 export type TaskKind =
   | 'CREATE_CAMPAIGN'
   | 'PUBLISH_STREAM';
+
+/** Отменить можно только задачу, за которую обработчик ещё не взялся */
+export type TaskNotCancellable = {
+  __typename?: 'TaskNotCancellable';
+  message: Scalars['String']['output'];
+};
+
+export type TaskNotFound = {
+  __typename?: 'TaskNotFound';
+  message: Scalars['String']['output'];
+};
+
+/** Повторить можно только отклонённую публикацию */
+export type TaskNotRetryable = {
+  __typename?: 'TaskNotRetryable';
+  message: Scalars['String']['output'];
+};
 
 /** Почему задача завершилась отказом */
 export type TaskRefusal = {

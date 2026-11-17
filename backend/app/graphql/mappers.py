@@ -189,6 +189,7 @@ def to_task(task: models.Task) -> gql.Task:
         finished_at=_time(task.finished_at),
         campaign_id=strawberry.ID(str(task.campaign_id)) if task.campaign_id else None,
         stream_id=strawberry.ID(str(task.stream_id)) if task.stream_id else None,
+        retry_of=strawberry.ID(str(task.retry_of)) if task.retry_of else None,
         refusal=gql.TaskRefusal(
             message=refusal.message,
             created_domain=gql.Domain(id=domain["id"], name=domain["name"]) if domain else None,

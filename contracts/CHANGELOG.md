@@ -2,6 +2,12 @@
 
 Версия одна для npm-пакета и пакета Python. Удаление или переименование — мажорная, добавление — минорная. До версии 1.0.0 ломающее изменение поднимает минорную версию и помечено словом «Ломающее».
 
+## 0.9.0
+
+- Запросы `tasks(statuses, kind, first)` и `queueStatus`; типы `QueueStatus`, `QueueState`, `TaskCount`.
+- Мутации `cancelTask(id)` → `CancelTaskResult = Task | TaskNotFound | TaskNotCancellable` и `retryTask(input: RetryTaskInput!)` → `RetryTaskResult = Task | TaskNotFound | TaskNotRetryable | StreamBusy | StreamNotFound | EmptyStream | TaskKeyReused`.
+- Поле `Task.retryOf`.
+
 ## 0.8.0
 
 - **Ломающее.** Мутация `pushStream` удалена. Вместо неё `publishStream(input: PublishStreamInput!)`: ставит задачу и возвращает `PublishStreamResult = Task | StreamConflict | StreamBusy | StreamNotFound | EmptyStream | TaskKeyReused`.
