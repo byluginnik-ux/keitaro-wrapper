@@ -63,6 +63,7 @@ async def open_bus(settings: Settings) -> AsyncGenerator[MessageBus]:
             QUEUES,
             max_attempts=settings.task_max_attempts,
             retry_delay=settings.task_retry_delay,
+            prefetch=settings.rabbitmq_prefetch,
         ) as rabbit:
             yield rabbit
         return
