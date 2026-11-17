@@ -100,6 +100,9 @@ type Stream {
   """Есть неопубликованные изменения"""
   dirty: Boolean!
 
+  """Номер записи потока: растёт при каждом изменении, возвращается обратно с действием"""
+  version: Int!
+
   """Офферы в порядке добавления; у потока-перенаправления список пуст"""
   offers: [StreamOffer!]!
 }
@@ -147,9 +150,18 @@ type ShareOverflow {
   message: String!
 }
 
+"""Поток изменён после того, как его показали пользователю; действие не применено"""
+type StreamConflict {
+  message: String!
+
+  """Поток, каким он сохранён сейчас"""
+  stream: Stream!
+}
+
 # Поток после действия либо причина отказа; при отказе черновик остаётся прежним.
 union StreamResult =
   | Stream
+  | StreamConflict
   | StreamNotFound
   | OfferNotFound
   | OfferAlreadyInStream
@@ -162,6 +174,9 @@ union StreamResult =
 input StreamOfferInput {
   streamId: ID!
   offerId: Int!
+
+  """Версия потока, которую видел пользователь; null — действовать по сохранённому сейчас"""
+  expectedVersion: Int
 }
 
 """Закрепить долю оффера"""
@@ -171,6 +186,9 @@ input PinShareInput {
 
   """Доля от 1 до 100"""
   share: Int!
+
+  """Версия потока, которую видел пользователь; null — действовать по сохранённому сейчас"""
+  expectedVersion: Int
 }
 
 """Что создать: кампания с двумя потоками"""
@@ -277,8 +295,8 @@ type Mutation {
   unpinShare(input: StreamOfferInput!): StreamResult!
 
   """Отменить черновик: поток возвращается к опубликованному снимку"""
-  cancelDraft(streamId: ID!): StreamResult!
+  cancelDraft(streamId: ID!, expectedVersion: Int): StreamResult!
 
   """Опубликовать черновик: отправить в Keitaro активные офферы потока с их долями"""
-  pushStream(streamId: ID!): StreamResult!
+  pushStream(streamId: ID!, expectedVersion: Int): StreamResult!
 }

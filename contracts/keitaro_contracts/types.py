@@ -86,6 +86,9 @@ class Stream:
         description="Схема потока в Keitaro: landings — офферы, redirect — перенаправление"
     )
     dirty: bool = strawberry.field(description="Есть неопубликованные изменения")
+    version: int = strawberry.field(
+        description="Номер записи потока: растёт при каждом изменении, возвращается обратно с действием"
+    )
     offers: list[StreamOffer] = strawberry.field(
         description="Офферы в порядке добавления; у потока-перенаправления список пуст"
     )
@@ -146,6 +149,14 @@ class ShareOverflow:
     message: str
 
 
+@strawberry.type(
+    description="Поток изменён после того, как его показали пользователю; действие не применено"
+)
+class StreamConflict:
+    message: str
+    stream: Stream = strawberry.field(description="Поток, каким он сохранён сейчас")
+
+
 @strawberry.type(description="Ввод не прошёл проверку; в Keitaro ничего не изменено")
 class ValidationFailed:
     message: str
@@ -156,6 +167,9 @@ class ValidationFailed:
 class StreamOfferInput:
     stream_id: strawberry.ID
     offer_id: int
+    expected_version: strawberry.Maybe[int | None] = strawberry.field(
+        description="Версия потока, которую видел пользователь; null — действовать по сохранённому сейчас"
+    )
 
 
 @strawberry.input(description="Закрепить долю оффера")
@@ -163,6 +177,9 @@ class PinShareInput:
     stream_id: strawberry.ID
     offer_id: int
     share: int = strawberry.field(description="Доля от 1 до 100")
+    expected_version: strawberry.Maybe[int | None] = strawberry.field(
+        description="Версия потока, которую видел пользователь; null — действовать по сохранённому сейчас"
+    )
 
 
 @strawberry.input(description="Что создать: кампания с двумя потоками")
@@ -205,6 +222,7 @@ FetchStreamsResult = Annotated[
 
 StreamResult = Annotated[
     Stream
+    | StreamConflict
     | StreamNotFound
     | OfferNotFound
     | OfferAlreadyInStream

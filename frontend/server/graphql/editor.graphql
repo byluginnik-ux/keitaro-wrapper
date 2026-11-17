@@ -27,6 +27,7 @@ fragment StreamFields on Stream {
 fragment StreamOutcome on StreamResult {
   __typename
   ... on Stream { ...StreamFields }
+  ... on StreamConflict { message }
   ... on StreamNotFound { message }
   ... on OfferNotFound { message }
   ... on OfferAlreadyInStream { message }

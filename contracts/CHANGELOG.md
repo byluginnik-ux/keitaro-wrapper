@@ -2,6 +2,12 @@
 
 Версия одна для npm-пакета и пакета Python. Удаление или переименование — мажорная, добавление — минорная.
 
+## 0.7.0
+
+- Поле `Stream.version` — номер записи потока.
+- Необязательное `expectedVersion` во входах `StreamOfferInput`, `PinShareInput` и аргументом у `cancelDraft`, `pushStream`.
+- В `StreamResult` добавлен вариант `StreamConflict { message, stream }` — исчерпывающий разбор результата у потребителя нужно дополнить.
+
 ## 0.6.0
 
 - Запрос `serviceInfo` и тип `ServiceInfo`: префикс названий кампаний и адрес трекера.

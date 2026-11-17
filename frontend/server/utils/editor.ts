@@ -72,6 +72,8 @@ function unwrap(result: StreamOutcomeFragment): StreamView {
   switch (result.__typename) {
     case 'Stream':
       return toStreamView(result)
+    case 'StreamConflict':
+      return fail(409, 'stream_conflict', result.message)
     case 'StreamNotFound':
       return fail(404, 'stream_not_found', result.message)
     case 'OfferNotFound':

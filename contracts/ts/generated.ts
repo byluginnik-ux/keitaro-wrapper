@@ -134,6 +134,7 @@ export type MutationBringBackOfferArgs = {
 
 
 export type MutationCancelDraftArgs = {
+  expectedVersion?: InputMaybe<Scalars['Int']['input']>;
   streamId: Scalars['ID']['input'];
 };
 
@@ -154,6 +155,7 @@ export type MutationPinShareArgs = {
 
 
 export type MutationPushStreamArgs = {
+  expectedVersion?: InputMaybe<Scalars['Int']['input']>;
   streamId: Scalars['ID']['input'];
 };
 
@@ -192,6 +194,8 @@ export type OfferState =
 
 /** Закрепить долю оффера */
 export type PinShareInput = {
+  /** Версия потока, которую видел пользователь; null — действовать по сохранённому сейчас */
+  expectedVersion?: InputMaybe<Scalars['Int']['input']>;
   offerId: Scalars['Int']['input'];
   /** Доля от 1 до 100 */
   share: Scalars['Int']['input'];
@@ -281,6 +285,16 @@ export type Stream = {
   offers: Array<StreamOffer>;
   /** Порядковый номер в кампании */
   position: Scalars['Int']['output'];
+  /** Номер записи потока: растёт при каждом изменении, возвращается обратно с действием */
+  version: Scalars['Int']['output'];
+};
+
+/** Поток изменён после того, как его показали пользователю; действие не применено */
+export type StreamConflict = {
+  __typename?: 'StreamConflict';
+  message: Scalars['String']['output'];
+  /** Поток, каким он сохранён сейчас */
+  stream: Stream;
 };
 
 /** У нас нет такого потока */
@@ -307,11 +321,13 @@ export type StreamOffer = {
 
 /** Оффер в потоке, над которым выполняется действие */
 export type StreamOfferInput = {
+  /** Версия потока, которую видел пользователь; null — действовать по сохранённому сейчас */
+  expectedVersion?: InputMaybe<Scalars['Int']['input']>;
   offerId: Scalars['Int']['input'];
   streamId: Scalars['ID']['input'];
 };
 
-export type StreamResult = EmptyStream | KeitaroFailure | OfferAlreadyInStream | OfferNotFound | ShareOverflow | Stream | StreamNotFound | ValidationFailed;
+export type StreamResult = EmptyStream | KeitaroFailure | OfferAlreadyInStream | OfferNotFound | ShareOverflow | Stream | StreamConflict | StreamNotFound | ValidationFailed;
 
 /** Потоки загружены из Keitaro и сохранены */
 export type StreamsFetched = {
