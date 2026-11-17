@@ -30,6 +30,9 @@ export const offerRef = v.object({ streamId: text, offerId: idLike, version: see
 const taskId = v.pipe(v.string(), v.uuid())
 export const taskBody = v.object({ taskId })
 export const taskRef = v.object({ taskId })
+export const taskFilter = v.object({
+  status: v.optional(v.picklist(['pending', 'running', 'succeeded', 'rejected', 'cancelled'])),
+})
 export const offerBody = v.object({ offerId: id })
 /** The range of a share is a rule of the domain, so only the type is checked here. */
 export const shareBody = v.object({ share: v.pipe(v.number(), v.integer()) })

@@ -36,6 +36,7 @@ fragment TaskFields on Task {
   finishedAt
   campaignId
   streamId
+  retryOf
   refusal { message createdDomain { id name } }
   steps { name at note }
 }

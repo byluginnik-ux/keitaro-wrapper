@@ -15,6 +15,7 @@
       >
         <NuxtLink to="/">Кампании</NuxtLink>
         <NuxtLink to="/create">Создать</NuxtLink>
+        <NuxtLink to="/tasks">Задачи</NuxtLink>
       </nav>
       <UiThemeToggle />
     </header>

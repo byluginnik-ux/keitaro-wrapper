@@ -1,0 +1,31 @@
+query TasksScreen($statuses: [TaskStatus!], $first: Int!) {
+  queueStatus {
+    tasks { status count }
+    outboxWaiting
+    outboxOldest
+    queues { name ready consumers }
+  }
+  tasks(statuses: $statuses, first: $first) { ...TaskFields }
+}
+
+mutation CancelTask($id: ID!) {
+  result: cancelTask(id: $id) {
+    __typename
+    ... on Task { ...TaskFields }
+    ... on TaskNotFound { message }
+    ... on TaskNotCancellable { message }
+  }
+}
+
+mutation RetryTask($input: RetryTaskInput!) {
+  result: retryTask(input: $input) {
+    __typename
+    ... on Task { ...TaskFields }
+    ... on TaskNotFound { message }
+    ... on TaskNotRetryable { message }
+    ... on StreamBusy { message }
+    ... on StreamNotFound { message }
+    ... on EmptyStream { message }
+    ... on TaskKeyReused { message }
+  }
+}

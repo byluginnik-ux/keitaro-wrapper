@@ -223,6 +223,7 @@ describe('publication', () => {
     finishedAt: null,
     campaignId: 'c-1',
     streamId: 's-2',
+    retryOf: null,
     refusal: null,
     steps: [{ name: 'queued', at: '2026-11-17T12:00:00+00:00', note: '' }],
   }

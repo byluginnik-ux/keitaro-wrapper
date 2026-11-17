@@ -94,7 +94,24 @@ export interface TaskView {
   finishedAt: string | null
   campaignId: string | null
   streamId: string | null
+  /** The rejected task this one repeats. */
+  retryOf: string | null
   /** Why the task was rejected, in words for the user. */
   refusal: string | null
   steps: TaskStepView[]
+}
+
+export interface QueueView {
+  /** Only the statuses that have tasks. */
+  tasks: { status: TaskStatus, count: number }[]
+  /** Messages that have not left for the bus yet. */
+  outboxWaiting: number
+  outboxOldest: string | null
+  queues: { name: string, ready: number, consumers: number }[]
+}
+
+/** The "Tasks" page: where the queued work is and what became of it (R-UX-30). */
+export interface TasksScreen {
+  queue: QueueView
+  tasks: TaskView[]
 }

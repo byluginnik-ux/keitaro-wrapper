@@ -58,6 +58,7 @@ export function toTaskView(task: TaskFieldsFragment): TaskView {
     finishedAt: task.finishedAt ?? null,
     campaignId: task.campaignId ?? null,
     streamId: task.streamId ?? null,
+    retryOf: task.retryOf ?? null,
     refusal: task.refusal?.message ?? null,
     steps: task.steps.map(step => ({ name: step.name, at: step.at, note: step.note })),
   }
