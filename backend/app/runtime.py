@@ -15,6 +15,7 @@ from app.services.catalog import CatalogService
 from app.services.creator import CreatorService
 from app.services.editor import EditorService
 from app.services.publisher import PUBLISH_REQUESTED, PublisherService
+from app.services.tasks import TasksService
 from app.settings import Settings
 from app.storage.factory import open_storage
 from app.storage.ports import Storage
@@ -32,6 +33,7 @@ class Runtime:
     creator: CreatorService
     editor: EditorService
     publisher: PublisherService
+    tasks: TasksService
 
     async def consume_tasks(self) -> None:
         """Start doing the queued work in this process."""
@@ -66,6 +68,9 @@ def assemble(
     """Wire the services to their tracker, storage and bus."""
     catalog = CatalogService(keitaro)
     relay = Relay(storage, bus)
+    publisher = PublisherService(
+        keitaro, storage, max_attempts=settings.task_max_attempts, announce=relay.nudge
+    )
     return Runtime(
         storage=storage,
         bus=bus,
@@ -75,9 +80,8 @@ def assemble(
             keitaro, catalog, storage, name_prefix=settings.campaign_name_prefix
         ),
         editor=EditorService(keitaro, catalog, storage),
-        publisher=PublisherService(
-            keitaro, storage, max_attempts=settings.task_max_attempts, announce=relay.nudge
-        ),
+        publisher=publisher,
+        tasks=TasksService(storage, bus, publisher),
     )
 
 

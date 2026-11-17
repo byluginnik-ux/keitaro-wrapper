@@ -22,6 +22,8 @@ from app.services.errors import (
     DraftNotPublishedError,
     KeitaroError,
     StreamBusyError,
+    TaskNotCancellableError,
+    TaskNotFoundError,
     ValidationError,
 )
 
@@ -96,6 +98,28 @@ class Query:
         task_id = mappers.to_uuid(id)
         found = await info.context.publisher.task(task_id) if task_id else None
         return mappers.to_task(found) if found else None
+
+    @strawberry.field(description="Задачи, сначала новые; без статусов — все")
+    async def tasks(
+        self,
+        info: AppInfo,
+        statuses: strawberry.Maybe[list[gql.TaskStatus] | None] = None,
+        kind: strawberry.Maybe[gql.TaskKind | None] = None,
+        first: int = 50,
+    ) -> list[gql.Task]:
+        wanted = mappers.optional(kind)
+        found = await info.context.tasks.recent(
+            statuses=[
+                models.TaskStatus[status.name] for status in mappers.optional(statuses) or []
+            ],
+            kind=models.TaskKind[wanted.name] if wanted else None,
+            limit=first,
+        )
+        return [mappers.to_task(item) for item in found]
+
+    @strawberry.field(description="Состояние событийной части")
+    async def queue_status(self, info: AppInfo) -> gql.QueueStatus:
+        return mappers.to_queue_status(await info.context.tasks.summary())
 
 
 @strawberry.type
@@ -241,6 +265,33 @@ class Mutation:
             )
         except DomainError as error:
             return mappers.to_publish_refusal(error)
+        return mappers.to_task(task)
+
+    @strawberry.mutation(
+        description="Отменить задачу, за которую обработчик ещё не взялся; поток освобождается"
+    )
+    async def cancel_task(self, info: AppInfo, id: strawberry.ID) -> gql.CancelTaskResult:  # noqa: A002 — the argument name is fixed by the contract
+        try:
+            task = await info.context.tasks.cancel(mappers.to_uuid(id) or UNKNOWN_STREAM)
+        except (TaskNotFoundError, TaskNotCancellableError) as error:
+            return mappers.to_cancel_refusal(error)
+        return mappers.to_task(task)
+
+    @strawberry.mutation(description="Повторить отклонённую публикацию новой задачей")
+    async def retry_task(
+        self,
+        info: AppInfo,
+        input: gql.RetryTaskInput,  # noqa: A002 — the argument name is fixed by the contract
+    ) -> gql.RetryTaskResult:
+        new_task_id = mappers.to_uuid(input.new_task_id)
+        if new_task_id is None:
+            raise ValidationError({"newTaskId": "Идентификатор задачи — UUID"})
+        try:
+            task = await info.context.tasks.retry(
+                mappers.to_uuid(input.task_id) or UNKNOWN_STREAM, new_task_id
+            )
+        except DomainError as error:
+            return mappers.to_task_refusal(error)
         return mappers.to_task(task)
 
 

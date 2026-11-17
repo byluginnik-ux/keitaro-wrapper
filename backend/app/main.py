@@ -32,6 +32,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             creator=runtime.creator,
             editor=runtime.editor,
             publisher=runtime.publisher,
+            tasks=runtime.tasks,
             service=service,
         )
 

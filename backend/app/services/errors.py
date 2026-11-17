@@ -128,6 +128,31 @@ class TaskKeyReusedError(DomainError):
         super().__init__("Этот идентификатор задачи уже использован для другого запроса")
 
 
+class TaskNotFoundError(DomainError):
+    code = "task_not_found"
+
+    def __init__(self) -> None:
+        super().__init__("Такой задачи нет")
+
+
+class TaskNotCancellableError(DomainError):
+    """Only a task nobody has taken yet can be cancelled (R-TK-08)."""
+
+    code = "task_not_cancellable"
+
+    def __init__(self) -> None:
+        super().__init__("Отменить можно только задачу, которая ещё ждёт выполнения")
+
+
+class TaskNotRetryableError(DomainError):
+    """Only a rejected publication can be repeated (R-TK-09)."""
+
+    code = "task_not_retryable"
+
+    def __init__(self) -> None:
+        super().__init__("Повторить можно только отклонённую публикацию")
+
+
 class StreamConflictError(DomainError):
     """Somebody else changed the stream first; nothing of this request was applied (R-CC-03).
 

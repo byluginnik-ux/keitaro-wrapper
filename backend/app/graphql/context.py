@@ -6,6 +6,7 @@ from app.services.catalog import CatalogService
 from app.services.creator import CreatorService
 from app.services.editor import EditorService
 from app.services.publisher import PublisherService
+from app.services.tasks import TasksService
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,4 +25,5 @@ class Context(BaseContext):
     creator: CreatorService
     editor: EditorService
     publisher: PublisherService
+    tasks: TasksService
     service: ServiceInfo

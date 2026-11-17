@@ -1,10 +1,13 @@
 from datetime import UTC, datetime
 
 from app.graphql.context import Context, ServiceInfo
+from app.messaging.memory import MemoryBus
+from app.runtime import QUEUES
 from app.services.catalog import CatalogService
 from app.services.creator import CreatorService
 from app.services.editor import EditorService
 from app.services.publisher import PublisherService
+from app.services.tasks import TasksService
 from app.storage.memory import create_memory_storage
 from app.storage.ports import Storage
 from tests.fakes import FakeKeitaro
@@ -30,6 +33,13 @@ def context_for(
     editor = EditorService(keitaro, catalog, storage, clock=lambda: NOW)
     service = ServiceInfo(campaign_name_prefix=PREFIX, tracker_url="https://tracker.test")
     publisher = PublisherService(keitaro, storage, clock=lambda: NOW)
+    bus = MemoryBus(QUEUES, max_attempts=3, retry_delay=0)
+    tasks = TasksService(storage, bus, publisher, clock=lambda: NOW)
     return Context(
-        catalog=catalog, creator=creator, editor=editor, publisher=publisher, service=service
+        catalog=catalog,
+        creator=creator,
+        editor=editor,
+        publisher=publisher,
+        tasks=tasks,
+        service=service,
     )

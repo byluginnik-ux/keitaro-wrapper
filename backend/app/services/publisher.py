@@ -88,7 +88,14 @@ class PublisherService:
     async def task(self, task_id: UUID) -> Task | None:
         return await self._storage.tasks.get(task_id)
 
-    async def request(self, stream_id: UUID, task_id: UUID, *, expected: int | None = None) -> Task:
+    async def request(
+        self,
+        stream_id: UUID,
+        task_id: UUID,
+        *,
+        expected: int | None = None,
+        retry_of: UUID | None = None,
+    ) -> Task:
         """Queue the publication; the same task ID again answers with the same task (R-TK-04)."""
         fingerprint = _fingerprint(stream_id)
         known = await self._storage.tasks.get(task_id)
@@ -107,6 +114,7 @@ class PublisherService:
             campaign_id=stream.campaign_id,
             stream_id=stream.id,
             steps=(TaskStep("queued", now),),
+            retry_of=retry_of,
         )
         if not stream.dirty:
             task = replace(

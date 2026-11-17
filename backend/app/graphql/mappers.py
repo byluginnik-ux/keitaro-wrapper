@@ -22,9 +22,13 @@ from app.services.errors import (
     StreamConflictError,
     StreamNotFoundError,
     TaskKeyReusedError,
+    TaskNotCancellableError,
+    TaskNotFoundError,
+    TaskNotRetryableError,
     ValidationError,
 )
 from app.services.shares import OfferState
+from app.services.tasks import QueueSummary
 
 
 def to_domain(domain: keitaro.Domain) -> gql.Domain:
@@ -223,3 +227,54 @@ def to_publish_refusal(error: DomainError) -> PublishRefusal:
         if isinstance(error, kind):
             return answer(message=str(error))
     raise error
+
+
+def to_queue_status(summary: QueueSummary) -> gql.QueueStatus:
+    return gql.QueueStatus(
+        tasks=[
+            gql.TaskCount(status=gql.TaskStatus[status.name], count=summary.tasks[status])
+            for status in models.TaskStatus
+            if summary.tasks.get(status)
+        ],
+        outbox_waiting=summary.outbox.waiting,
+        outbox_oldest=_time(summary.outbox.oldest),
+        queues=[
+            gql.QueueState(name=queue.name, ready=queue.ready, consumers=queue.consumers)
+            for queue in summary.queues
+        ],
+    )
+
+
+type TaskRefusalAnswer = (
+    gql.TaskNotFound
+    | gql.TaskNotRetryable
+    | gql.StreamBusy
+    | gql.StreamNotFound
+    | gql.EmptyStream
+    | gql.TaskKeyReused
+)
+
+NOT_STEERED = {
+    TaskNotFoundError: gql.TaskNotFound,
+    TaskNotRetryableError: gql.TaskNotRetryable,
+    StreamBusyError: gql.StreamBusy,
+    StreamNotFoundError: gql.StreamNotFound,
+    EmptyStreamError: gql.EmptyStream,
+    TaskKeyReusedError: gql.TaskKeyReused,
+}
+
+
+def to_task_refusal(error: DomainError) -> TaskRefusalAnswer:
+    """Turn the reason a task was not repeated into its member of RetryTaskResult."""
+    for kind, answer in NOT_STEERED.items():
+        if isinstance(error, kind):
+            return answer(message=str(error))
+    raise error
+
+
+def to_cancel_refusal(
+    error: TaskNotFoundError | TaskNotCancellableError,
+) -> gql.TaskNotFound | gql.TaskNotCancellable:
+    if isinstance(error, TaskNotFoundError):
+        return gql.TaskNotFound(message=str(error))
+    return gql.TaskNotCancellable(message=str(error))
