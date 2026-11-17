@@ -13,7 +13,7 @@ import {
   TrackerUrlDocument,
   UnpinShareDocument,
 } from '../graphql/operations'
-import { assertNever, fail } from './api-error'
+import { assertNever, conflict, fail } from './api-error'
 import type { GraphqlClient } from './graphql'
 import { fetchInput, offerBody, offerRef, parse, shareBody, streamRef } from './schemas'
 import { toCampaignView, toStreamView } from './views'
@@ -75,7 +75,7 @@ function unwrap(result: StreamOutcomeFragment): StreamView {
     case 'Stream':
       return toStreamView(result)
     case 'StreamConflict':
-      return fail(409, 'stream_conflict', result.message)
+      return conflict(result.message, toStreamView(result.stream))
     case 'StreamNotFound':
       return fail(404, 'stream_not_found', result.message)
     case 'OfferNotFound':
@@ -110,22 +110,32 @@ export async function runStreamAction(
 ): Promise<StreamView> {
   switch (action) {
     case 'add': {
-      const { streamId } = parse(streamRef, input)
+      const { streamId, version } = parse(streamRef, input)
       const { offerId } = parse(offerBody, input.body)
-      return unwrap((await graphql(AddOfferDocument, { input: { streamId, offerId } })).result)
+      const variables = { input: { streamId, offerId, expectedVersion: version } }
+      return unwrap((await graphql(AddOfferDocument, variables)).result)
     }
     case 'pin': {
-      const reference = parse(offerRef, input)
+      const { version, ...reference } = parse(offerRef, input)
       const { share } = parse(shareBody, input.body)
-      return unwrap((await graphql(PinShareDocument, { input: { ...reference, share } })).result)
+      const variables = { input: { ...reference, share, expectedVersion: version } }
+      return unwrap((await graphql(PinShareDocument, variables)).result)
     }
     case 'remove':
     case 'restore':
     case 'unpin':
-      return unwrap((await graphql(OFFER_ACTIONS[action], { input: parse(offerRef, input) })).result)
+    {
+      const { version, ...reference } = parse(offerRef, input)
+      const variables = { input: { ...reference, expectedVersion: version } }
+      return unwrap((await graphql(OFFER_ACTIONS[action], variables)).result)
+    }
     case 'cancel':
     case 'push':
-      return unwrap((await graphql(STREAM_ACTIONS[action], parse(streamRef, input))).result)
+    {
+      const { streamId, version } = parse(streamRef, input)
+      const variables = { streamId, expectedVersion: version }
+      return unwrap((await graphql(STREAM_ACTIONS[action], variables)).result)
+    }
     default:
       return assertNever(action)
   }

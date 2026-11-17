@@ -35,6 +35,14 @@ function request(streamId: string, command: StreamCommand): [string, ApiRequest]
   }
 }
 
+function show(updated: StreamView) {
+  if (!screen.value) return
+  screen.value = {
+    ...screen.value,
+    streams: screen.value.streams.map(stream => (stream.id === updated.id ? updated : stream)),
+  }
+}
+
 /** Every action answers with the whole stream; the page shows what the server said (R-UX-16). */
 async function run(streamId: string, command: StreamCommand) {
   if (pending.value[streamId] || !screen.value) return
@@ -44,14 +52,14 @@ async function run(streamId: string, command: StreamCommand) {
   syncError.value = null
   try {
     const [url, options] = request(streamId, command)
-    const updated = await api<StreamView>(url, options)
-    screen.value = {
-      ...screen.value,
-      streams: screen.value.streams.map(stream => (stream.id === streamId ? updated : stream)),
-    }
+    const version = screen.value.streams.find(stream => stream.id === streamId)?.version
+    show(await api<StreamView>(url, version === undefined ? options : { ...options, query: { version } }))
   }
   catch (error) {
-    errors.value = { ...errors.value, [streamId]: toApiError(error).message }
+    const refusal = toApiError(error)
+    // Another window changed the stream: show what it is now, next to the reason (R-UX-17).
+    if (refusal.stream) show(refusal.stream)
+    errors.value = { ...errors.value, [streamId]: refusal.message }
   }
   finally {
     const { [streamId]: _done, ...rest } = pending.value
