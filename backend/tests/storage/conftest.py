@@ -65,9 +65,10 @@ async def mongo_storage(mongo_url: str) -> AsyncIterator[Storage]:
     client: AsyncMongoClient[dict[str, Any]] = AsyncMongoClient(
         mongo_url, uuidRepresentation="standard", tz_aware=True
     )
-    await client.drop_database("keitaro_test")
     database = client["keitaro_test"]
     await prepare(database)
+    for name in await database.list_collection_names():
+        await database[name].delete_many({})
     yield create_mongo_storage(database)
     await client.close()
 
