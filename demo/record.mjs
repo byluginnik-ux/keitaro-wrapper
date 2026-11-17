@@ -48,10 +48,13 @@ function check(item, step, actual, expected) {
   if (!ok) throw new Error(`${item} — ${step}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`)
 }
 
+/** The tracker keeps its own order of offers: compositions are compared as sets. */
+const pairs = (...list) => list.sort((left, right) => left[0] - right[0])
+
 /** The offers the tracker holds in the stream with offers, as [id, share]. */
 function held(streams) {
   const stream = streams.find(item => item.schema === 'landings')
-  return (stream?.offers ?? []).filter(offer => offer.state !== 'deleted').map(offer => [offer.offer_id, offer.share])
+  return pairs(...(stream?.offers ?? []).filter(offer => offer.state !== 'deleted').map(offer => [offer.offer_id, offer.share]))
 }
 const marks = []
 const started = Date.now()
@@ -109,7 +112,8 @@ async function shown(page) {
   for (const id of Object.values(OFFERS)) {
     const item = row(page, id)
     if (await item.count() === 0) continue
-    shares[id] = Number((await item.innerText()).match(/(\d+)\s*%/)?.[1])
+    // the name of an offer may itself hold a percentage
+    shares[id] = Number((await item.innerText()).replaceAll(names[id], '').match(/(\d+)\s*%/)?.[1])
   }
   return shares
 }
@@ -232,7 +236,7 @@ try {
       [(redirect.filters ?? []).map(filter => [filter.name, filter.mode, [].concat(filter.payload)]), redirect.action_payload],
       [[['country', 'accept', [COUNTRY.code]]], 'https://google.com'])
   }
-  check('Создаватор: поток 2 ведёт на выбранный оффер', 'один оффер, доля 100', held(made.streams), [[Number(OFFERS.first), 100]])
+  check('Создаватор: поток 2 ведёт на выбранный оффер', 'один оффер, доля 100', held(made.streams), pairs([Number(OFFERS.first), 100]))
   await say(page, 'Два потока', 'страна → google.com, остальные → оффер 100 %')
   await pause(3625)
 
@@ -251,7 +255,7 @@ try {
   await pause(3770)
   check('Редактор: цифры', 'три оффера делят 100', await shown(page), { [OFFERS.first]: 34, [OFFERS.second]: 33, [OFFERS.third]: 33 })
   const draft = await showTracker(page, campaignId, 'черновик не отправлен')
-  check('Редактор: добавление', 'черновик не меняет трекер', held(draft.streams), [[Number(OFFERS.first), 100]])
+  check('Редактор: добавление', 'черновик не меняет трекер', held(draft.streams), pairs([Number(OFFERS.first), 100]))
   await say(page, 'В Keitaro пока прежний состав', 'изменения копятся в черновике')
   await pause(3190)
   await publish(page)
@@ -260,7 +264,7 @@ try {
   await pause(2175)
   const three = await showTracker(page, campaignId, 'после публикации')
   const [a, b, c] = ids('first', 'second', 'third')
-  check('Редактор: добавление', 'после публикации в трекере три оффера', held(three.streams), [[a, 34], [b, 33], [c, 33]])
+  check('Редактор: добавление', 'после публикации в трекере три оффера', held(three.streams), pairs([a, 34], [b, 33], [c, 33]))
 
   await page.getByRole('button', { name: new RegExp(`^Удалить ${escaped(names[OFFERS.second])}`) }).click()
   await say(page, 'Удалили оффер', 'он остаётся в потоке: «Удалён», 0 %, доли пересчитаны')
@@ -269,14 +273,14 @@ try {
   await publish(page)
   await published(page)
   const two = await showTracker(page, campaignId, 'оффер удалён')
-  check('Редактор: удаление', 'после публикации оффера нет в трекере', held(two.streams), [[a, 50], [c, 50]])
+  check('Редактор: удаление', 'после публикации оффера нет в трекере', held(two.streams), pairs([a, 50], [c, 50]))
   await page.getByRole('button', { name: new RegExp(`^Вернуть ${escaped(names[OFFERS.second])}`) }).click()
   await say(page, '«Вернуть»', 'оффер снова активен, доли снова 34 / 33 / 33')
   await pause(3770)
   await publish(page)
   await published(page)
   const back = await showTracker(page, campaignId, 'оффер возвращён')
-  check('Редактор: возврат удалённого', 'оффер снова в трекере', held(back.streams), [[a, 34], [b, 33], [c, 33]])
+  check('Редактор: возврат удалённого', 'оффер снова в трекере', held(back.streams), pairs([a, 34], [b, 33], [c, 33]))
 
   await say(page, 'Закрепление доли', 'нажать на долю, ввести число, Enter')
   await pin(page, OFFERS.first, 60)
@@ -299,7 +303,7 @@ try {
   await say(page, '«Отменить»', 'поток вернулся к опубликованному состоянию')
   await pause(4060)
   check('Редактор: отмена', 'на странице опубликованный состав', await shown(page), { [OFFERS.first]: 34, [OFFERS.second]: 33, [OFFERS.third]: 33 })
-  check('Редактор: отмена', 'в трекер ничего не ушло', held(await tracker('GET', `/campaigns/${campaignId}/streams`)), [[a, 34], [b, 33], [c, 33]])
+  check('Редактор: отмена', 'в трекер ничего не ушло', held(await tracker('GET', `/campaigns/${campaignId}/streams`)), pairs([a, 34], [b, 33], [c, 33]))
 
   // the composition is changed in the tracker itself, behind the back of the service
   const stream = back.streams.find(item => item.schema === 'landings')
