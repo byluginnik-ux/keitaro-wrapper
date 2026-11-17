@@ -356,6 +356,7 @@ class CreatorService:
             # found on a repeat: the tracker created it and the answer was lost
             found = next((item for item in listed if item.name.lower() == host), None)
             made = found or await self._keitaro.create_domain(host)
+            await self._catalog.forget_domains()
             domain = {"id": made.id, "name": made.name, "created": True}
             await self._mark(run, "domain", domain)
         if domain.get("created"):
