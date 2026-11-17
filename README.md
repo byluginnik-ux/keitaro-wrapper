@@ -75,9 +75,10 @@ corepack pnpm test:e2e
 Тесты хранилища на настоящих базах (без них пропускаются с причиной, в CI пропуск запрещён):
 
 ```
-docker compose --profile test up -d --wait db-test mongo-test
+docker compose --profile test up -d --wait db-test mongo-test rabbitmq-test
 export TEST_DATABASE_URL=postgresql+asyncpg://keitaro:keitaro@127.0.0.1:55432/keitaro_test
 export TEST_MONGO_URL="mongodb://127.0.0.1:57017/?directConnection=true"
+export TEST_RABBITMQ_URL="amqp://guest:guest@127.0.0.1:55672/"
 uv run pytest -q
 ```
 
