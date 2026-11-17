@@ -17,6 +17,7 @@ from app.services.creator import (
 )
 from app.services.errors import KeitaroError, TaskKeyReusedError, ValidationError
 from app.services.models import Campaign, OfferLink, Published, Task, TaskStatus
+from app.storage.errors import StorageConflictError
 from app.storage.memory import create_memory_storage
 from app.storage.ports import Storage
 from tests.fakes import A, FakeKeitaro
@@ -549,3 +550,27 @@ async def test_created_domain_is_seen_in_the_list_at_once(
     await creator.handle(delivery(task))
 
     assert "new.example.com" in [domain.name for domain in await catalog.domains()]
+
+
+async def test_outcome_that_cannot_be_stored_does_not_leave_the_task_running(
+    keitaro: FakeKeitaro, storage: Storage
+) -> None:
+    """R-CR-15: the storage refuses the campaign, and no other delivery has ended the task.
+
+    Stepping aside in silence would leave the task running for ever; the message is
+    brought again instead, and after the last attempt the campaign is removed.
+    """
+    creator = service(keitaro, storage)
+    await create(creator, storage, REQUEST)
+    keitaro.campaigns.clear()
+    keitaro.streams.clear()
+    keitaro._next_id = 1000  # noqa: SLF001 — the tracker hands out the same IDs again  # pyright: ignore[reportPrivateUsage]
+    task = await creator.request(replace(REQUEST, name="test_bulygin_again"), uuid4())
+
+    with pytest.raises(StorageConflictError):
+        await creator.handle(delivery(task))
+    await creator.bury(delivery(task, MAX_ATTEMPTS))
+
+    ended = await stored(storage, task)
+    assert ended.status is TaskStatus.REJECTED
+    assert keitaro.campaigns == {}
