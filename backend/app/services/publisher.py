@@ -8,14 +8,13 @@ from uuid import UUID, uuid4
 from app.keitaro import models as tracker
 from app.keitaro.gateway import KeitaroGateway
 from app.messaging.ports import Message
-from app.services.creator import utc_now
+from app.services.attempts import begin, is_transient, same_task, unfinished, utc_now
 from app.services.errors import (
     EmptyStreamError,
     KeitaroError,
     StreamBusyError,
     StreamConflictError,
     StreamNotFoundError,
-    TaskKeyReusedError,
 )
 from app.services.models import (
     AuditEntry,
@@ -36,8 +35,6 @@ from app.storage.ports import Storage
 PUBLISH_REQUESTED = "stream.publish.requested"
 PUBLISHED = "stream.published"
 PUBLISH_REJECTED = "stream.publish.rejected"
-
-SERVER_ERROR = 500
 
 
 def _nothing() -> None:
@@ -100,7 +97,7 @@ class PublisherService:
         fingerprint = _fingerprint(stream_id)
         known = await self._storage.tasks.get(task_id)
         if known is not None:
-            return _same(known, fingerprint)
+            return same_task(known, fingerprint)
         stream = await self._publishable(stream_id, expected)
         composition = _composition(stream)
 
@@ -135,7 +132,7 @@ class PublisherService:
             raced = await self._storage.tasks.get(task_id)
             if raced is None:
                 raise
-            return _same(raced, fingerprint)
+            return same_task(raced, fingerprint)
         except StorageConflictError as error:
             raise StreamConflictError(await self._storage.streams.get(stream_id)) from error
         self._announce()
@@ -159,31 +156,18 @@ class PublisherService:
 
         Raising asks the bus to deliver the message again later (R-EV-08).
         """
-        task = await self._storage.tasks.get(UUID(message.payload["task_id"]))
-        if task is None or task.status.final:
-            return
-        now = self._clock()
-        running = replace(
-            task,
-            status=TaskStatus.RUNNING,
-            attempts=task.attempts + 1,
-            started_at=task.started_at or now,
-            steps=(*task.steps, TaskStep("attempt", now, str(task.attempts + 1))),
-        )
-        try:
-            await self._storage.tasks.save(running, was=task.status)
-        except StorageConflictError:
-            return  # cancelled or taken by another worker in between
+        running = await begin(self._storage, message, self._clock)
+        if running is None:
+            return  # ended, cancelled or taken by another worker
         offers = [
             tracker.StreamOffer(offer_id=item["offer_id"], share=item["share"])
-            for item in task.payload["after"]
+            for item in running.payload["after"]
         ]
         try:
             # replacing the whole composition twice gives the same result as once
-            await self._keitaro.replace_stream_offers(task.payload["keitaro_id"], offers)
+            await self._keitaro.replace_stream_offers(running.payload["keitaro_id"], offers)
         except KeitaroError as error:
-            transient = error.status is None or error.status >= SERVER_ERROR
-            if transient and message.attempt < self._max_attempts:
+            if is_transient(error) and message.attempt < self._max_attempts:
                 raise
             refusal = Refusal(error.code, str(error), details={"status": error.status})
             await self._finish(running, refusal)
@@ -192,8 +176,8 @@ class PublisherService:
 
     async def bury(self, message: Message) -> None:
         """Close the task of a message nobody managed to handle (R-EV-08)."""
-        task = await self._storage.tasks.get(UUID(message.payload["task_id"]))
-        if task is None or task.status.final:
+        task = await unfinished(self._storage, message)
+        if task is None:
             return
         refusal = Refusal("attempts_exhausted", "Задачу не удалось выполнить: попытки исчерпаны")
         await self._finish(task, refusal)
@@ -238,12 +222,6 @@ class PublisherService:
         except StorageConflictError:
             return  # another delivery of the same message has already written the outcome
         self._announce()
-
-
-def _same(known: Task, fingerprint: str) -> Task:
-    if known.fingerprint != fingerprint:
-        raise TaskKeyReusedError
-    return known
 
 
 def _released(stream: Stream, *, published: bool) -> Stream:

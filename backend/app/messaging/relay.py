@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from uuid import UUID
 
 from app.messaging.ports import Message, MessageBus
-from app.services.creator import utc_now
+from app.services.attempts import utc_now
 from app.storage.ports import Storage
 
 log = logging.getLogger(__name__)

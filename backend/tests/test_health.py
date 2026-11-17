@@ -1,14 +1,14 @@
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator
 from dataclasses import replace
 
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from app.cache.ports import CacheUnavailableError
 from app.main import create_app
 from app.messaging.ports import QueueStats
 from app.settings import Settings
+from tests.fakes import BrokenCache
 
 pytestmark = pytest.mark.anyio
 
@@ -38,18 +38,6 @@ async def test_ready_when_storage_bus_and_cache_answer(http: AsyncClient) -> Non
     response = await http.get("/health/ready")
 
     assert (response.status_code, response.json()) == (200, {"status": "ready", "failed": []})
-
-
-class BrokenCache:
-    async def get_or_load(self, key: str, ttl: float, load: Callable[[], Awaitable[str]]) -> str:
-        del ttl, load
-        raise CacheUnavailableError(key)
-
-    async def drop(self, key: str) -> None:
-        raise CacheUnavailableError(key)
-
-    async def ping(self) -> None:
-        raise CacheUnavailableError
 
 
 async def test_not_ready_without_the_cache(app: FastAPI, http: AsyncClient) -> None:

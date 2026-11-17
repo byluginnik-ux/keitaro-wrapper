@@ -4,7 +4,8 @@ from datetime import datetime
 from uuid import UUID
 
 from app.messaging.ports import MessageBus, QueueStats
-from app.services.creator import CreatorService, NewCampaignRequest, utc_now
+from app.services.attempts import utc_now
+from app.services.creator import CreatorService, NewCampaignRequest
 from app.services.errors import (
     TaskNotCancellableError,
     TaskNotFoundError,

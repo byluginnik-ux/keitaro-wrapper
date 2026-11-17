@@ -6,15 +6,16 @@ import secrets
 import string
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field, replace
-from datetime import UTC, datetime
+from datetime import datetime
 from uuid import UUID, uuid4
 
 from app.keitaro import models as tracker
 from app.keitaro.gateway import KeitaroGateway
 from app.messaging.ports import Message
+from app.services.attempts import begin, is_transient, same_task, unfinished, utc_now
 from app.services.catalog import CatalogService
 from app.services.countries import find_country
-from app.services.errors import KeitaroError, TaskKeyReusedError, ValidationError
+from app.services.errors import KeitaroError, ValidationError
 from app.services.models import (
     AuditEntry,
     Campaign,
@@ -38,8 +39,6 @@ CREATE_REQUESTED = "campaign.create.requested"
 CREATED = "campaign.created"
 CREATE_REJECTED = "campaign.create.rejected"
 
-SERVER_ERROR = 500
-
 ALIAS_ALPHABET = string.ascii_lowercase + string.digits
 ALIAS_LENGTH = 8
 REDIRECT_TARGET = "https://google.com"
@@ -49,11 +48,6 @@ HOST_NAME = re.compile(r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)
 def random_alias() -> str:
     """Make the part of the campaign address the tracker requires to be unique."""
     return "".join(secrets.choice(ALIAS_ALPHABET) for _ in range(ALIAS_LENGTH))
-
-
-def utc_now() -> datetime:
-    """Return the current moment; replaced in tests."""
-    return datetime.now(UTC)
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,12 +134,6 @@ def _fingerprint(request: NewCampaignRequest) -> str:
     return hashlib.sha256(json.dumps(described, sort_keys=True).encode()).hexdigest()
 
 
-def _same(known: Task, fingerprint: str) -> Task:
-    if known.fingerprint != fingerprint:
-        raise TaskKeyReusedError
-    return known
-
-
 def _described(request: NewCampaignRequest, plan: _Plan, alias: str) -> Payload:
     """Put the checked request into the task, so the worker needs nothing else (R-CR-13)."""
     domain = {"id": plan.domain.id, "name": plan.domain.name} if plan.domain else None
@@ -197,7 +185,7 @@ class CreatorService:
         fingerprint = _fingerprint(request)
         known = await self._storage.tasks.get(task_id)
         if known is not None:
-            return _same(known, fingerprint)
+            return same_task(known, fingerprint)
         plan = await self._check(request)
         now = self._clock()
         task = Task(
@@ -219,7 +207,7 @@ class CreatorService:
             raced = await self._storage.tasks.get(task_id)
             if raced is None:
                 raise
-            return _same(raced, fingerprint)
+            return same_task(raced, fingerprint)
         self._announce()
         return task
 
@@ -228,29 +216,16 @@ class CreatorService:
 
         Raising asks the bus to deliver the message again later (R-CR-15).
         """
-        task = await self._storage.tasks.get(UUID(message.payload["task_id"]))
-        if task is None or task.status.final:
-            return
-        now = self._clock()
-        running = replace(
-            task,
-            status=TaskStatus.RUNNING,
-            attempts=task.attempts + 1,
-            started_at=task.started_at or now,
-            steps=(*task.steps, TaskStep("attempt", now, str(task.attempts + 1))),
-        )
-        try:
-            await self._storage.tasks.save(running, was=task.status)
-        except StorageConflictError:
-            return  # finished by another delivery in between
+        running = await begin(self._storage, message, self._clock)
+        if running is None:
+            return  # ended or taken by another delivery
         run = _Run(running)
         try:
             created, first, second = await self._assemble(run)
         except _SupersededError:
             return
         except KeitaroError as error:
-            transient = error.status is None or error.status >= SERVER_ERROR
-            if transient and message.attempt < self._max_attempts:
+            if is_transient(error) and message.attempt < self._max_attempts:
                 raise
             unsure = error.status is None or running.attempts > 1
             await self._reject(run, error, status=error.status, look_up=unsure)
@@ -259,8 +234,8 @@ class CreatorService:
 
     async def bury(self, message: Message) -> None:
         """Close the task of a message nobody managed to handle (R-CR-15)."""
-        task = await self._storage.tasks.get(UUID(message.payload["task_id"]))
-        if task is None or task.status.final:
+        task = await unfinished(self._storage, message)
+        if task is None:
             return
         done = task.payload["progress"]
         run = _Run(task)

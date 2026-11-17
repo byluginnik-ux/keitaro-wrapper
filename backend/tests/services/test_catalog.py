@@ -1,12 +1,9 @@
-from collections.abc import Awaitable, Callable
-
 import pytest
 
 from app.cache.memory import MemoryCache
-from app.cache.ports import CacheUnavailableError
 from app.keitaro.models import Offer
 from app.services.catalog import CatalogService
-from tests.fakes import B, FakeKeitaro
+from tests.fakes import B, BrokenCache, FakeKeitaro
 
 pytestmark = pytest.mark.anyio
 
@@ -107,18 +104,6 @@ async def test_two_services_on_one_cache_read_the_tracker_once() -> None:
 
     assert keitaro.calls["list_offers"] == 1
     assert [offer.id for offer in found] == [B]
-
-
-class BrokenCache:
-    async def get_or_load(self, key: str, ttl: float, load: Callable[[], Awaitable[str]]) -> str:
-        del ttl, load
-        raise CacheUnavailableError(key)
-
-    async def drop(self, key: str) -> None:
-        raise CacheUnavailableError(key)
-
-    async def ping(self) -> None:
-        raise CacheUnavailableError
 
 
 async def test_unavailable_cache_is_bypassed() -> None:

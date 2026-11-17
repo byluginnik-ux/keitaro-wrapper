@@ -1,6 +1,7 @@
 """What the web process, the outbox sender and the worker are assembled from."""
 
 import asyncio
+import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
@@ -23,6 +24,8 @@ from app.settings import Settings
 from app.storage.factory import open_storage
 from app.storage.ports import Storage
 
+log = logging.getLogger(__name__)
+
 TASKS = Queue("keitaro.tasks", (PUBLISH_REQUESTED, CREATE_REQUESTED))
 QUEUES = (TASKS,)
 
@@ -44,14 +47,21 @@ class Runtime:
         await self.bus.consume(TASKS.name, self._handle)
         await self.bus.consume(TASKS.dead, self._bury)
 
+    def _owner(self, message: Message) -> CreatorService | PublisherService | None:
+        """Find the service the topic belongs to; a topic nobody owns is reported, not guessed."""
+        owners = {CREATE_REQUESTED: self.creator, PUBLISH_REQUESTED: self.publisher}
+        owner = owners.get(message.topic)
+        if owner is None:
+            log.error("no handler for topic %s", message.topic)
+        return owner
+
     async def _handle(self, message: Message) -> None:
-        """Give the message to the service its topic belongs to."""
-        service = self.creator if message.topic == CREATE_REQUESTED else self.publisher
-        await service.handle(message)
+        if owner := self._owner(message):
+            await owner.handle(message)
 
     async def _bury(self, message: Message) -> None:
-        service = self.creator if message.topic == CREATE_REQUESTED else self.publisher
-        await service.bury(message)
+        if owner := self._owner(message):
+            await owner.bury(message)
 
 
 @asynccontextmanager

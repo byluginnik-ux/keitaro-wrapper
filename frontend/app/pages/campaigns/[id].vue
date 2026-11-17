@@ -50,19 +50,11 @@ function show(updated: StreamView) {
   }
 }
 
-/** Every action answers with the whole stream; the page shows what the server said (R-UX-16). */
-async function run(streamId: string, command: StreamCommand) {
-  if (pending.value[streamId] || !screen.value) return
-  pending.value = { ...pending.value, [streamId]: command.action }
-  const { [streamId]: _old, ...otherErrors } = errors.value
-  errors.value = otherErrors
-  syncError.value = null
+/** Keep the stream marked as busy while the work goes on; a refusal is shown at the stream. */
+async function busy(streamId: string, action: StreamCommand['action'], work: () => Promise<void>) {
+  pending.value = { ...pending.value, [streamId]: action }
   try {
-    const [url, options] = request(streamId, command)
-    const version = screen.value.streams.find(stream => stream.id === streamId)?.version
-    const versioned = version === undefined ? options : { ...options, query: { version } }
-    if (command.action === 'push') await publish(streamId, await api<TaskView>(url, versioned))
-    else show(await api<StreamView>(url, versioned))
+    await work()
   }
   catch (error) {
     const refusal = toApiError(error)
@@ -76,6 +68,21 @@ async function run(streamId: string, command: StreamCommand) {
     const { [streamId]: _done, ...rest } = pending.value
     pending.value = rest
   }
+}
+
+/** Every action answers with the whole stream; the page shows what the server said (R-UX-16). */
+async function run(streamId: string, command: StreamCommand) {
+  if (pending.value[streamId] || !screen.value) return
+  const { [streamId]: _old, ...otherErrors } = errors.value
+  errors.value = otherErrors
+  syncError.value = null
+  const [url, options] = request(streamId, command)
+  const version = screen.value.streams.find(stream => stream.id === streamId)?.version
+  const versioned = version === undefined ? options : { ...options, query: { version } }
+  await busy(streamId, command.action, async () => {
+    if (command.action === 'push') await publish(streamId, await api<TaskView>(url, versioned))
+    else show(await api<StreamView>(url, versioned))
+  })
 }
 
 /** The publication was queued: wait for its end and show what became of the stream (R-UX-18). */
@@ -93,18 +100,9 @@ async function publish(streamId: string, queued: TaskView) {
 
 /** A publication that was running when the page opened is followed to its end too. */
 async function resume(stream: StreamView) {
-  if (!stream.publishingTaskId || pending.value[stream.id]) return
-  pending.value = { ...pending.value, [stream.id]: 'push' }
-  try {
-    await publish(stream.id, await api<TaskView>(`/api/tasks/${stream.publishingTaskId}`))
-  }
-  catch (error) {
-    errors.value = { ...errors.value, [stream.id]: toApiError(error).message }
-  }
-  finally {
-    const { [stream.id]: _done, ...rest } = pending.value
-    pending.value = rest
-  }
+  const taskId = stream.publishingTaskId
+  if (!taskId || pending.value[stream.id]) return
+  await busy(stream.id, 'push', async () => publish(stream.id, await api<TaskView>(`/api/tasks/${taskId}`)))
 }
 
 async function searchOffers(streamId: string, search: string) {

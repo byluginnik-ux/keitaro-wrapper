@@ -6,8 +6,8 @@ from uuid import UUID, uuid4
 
 from app.keitaro import models as tracker
 from app.keitaro.gateway import KeitaroGateway
+from app.services.attempts import utc_now
 from app.services.catalog import CatalogService
-from app.services.creator import utc_now
 from app.services.errors import (
     CampaignNotFoundError,
     DraftNotPublishedError,

@@ -1,7 +1,8 @@
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 
+from app.cache.ports import CacheUnavailableError
 from app.keitaro.models import (
     Campaign,
     Domain,
@@ -178,3 +179,17 @@ def tracker_with_campaign(*offers: tuple[int, int]) -> FakeKeitaro:
         offers=shares(*(offers or ((A, 34), (B, 33), (C, 33)))),
     )
     return keitaro
+
+
+class BrokenCache:
+    """A cache that cannot be reached (R-CH-04)."""
+
+    async def get_or_load(self, key: str, ttl: float, load: Callable[[], Awaitable[str]]) -> str:
+        del ttl, load
+        raise CacheUnavailableError(key)
+
+    async def drop(self, key: str) -> None:
+        raise CacheUnavailableError(key)
+
+    async def ping(self) -> None:
+        raise CacheUnavailableError
