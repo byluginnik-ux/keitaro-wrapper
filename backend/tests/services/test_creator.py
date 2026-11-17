@@ -528,3 +528,24 @@ async def test_repeated_delivery_of_a_finished_task_does_nothing(
     assert await stored(storage, task) == task
     assert (keitaro.calls["create_campaign"], keitaro.calls["create_stream"]) == (1, 2)
     assert await topics(storage) == [CREATE_REQUESTED, CREATED]
+
+
+async def test_created_domain_is_seen_in_the_list_at_once(
+    keitaro: FakeKeitaro, storage: Storage
+) -> None:
+    """R-CH-05: the list of domains was cached before the campaign made a new one."""
+    catalog = CatalogService(keitaro)
+    creator = CreatorService(
+        keitaro,
+        catalog,
+        storage,
+        name_prefix=PREFIX,
+        clock=lambda: NOW,
+        new_alias=lambda: "alias001",
+    )
+    await catalog.domains()
+
+    task = await creator.request(NEW_DOMAIN, uuid4())
+    await creator.handle(delivery(task))
+
+    assert "new.example.com" in [domain.name for domain in await catalog.domains()]

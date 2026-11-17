@@ -24,3 +24,7 @@ class Settings(BaseSettings):
     task_max_attempts: int = 3
     task_retry_delay: float = 5.0
     outbox_poll: float = 0.5
+
+    cache_backend: Literal["memory", "redis"] = "memory"
+    redis_url: str = "redis://redis:6379/0"
+    catalog_ttl: float = 30.0

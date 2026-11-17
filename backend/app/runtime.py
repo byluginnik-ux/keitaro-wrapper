@@ -5,6 +5,9 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 
+from app.cache.factory import open_cache
+from app.cache.memory import MemoryCache
+from app.cache.ports import Cache
 from app.keitaro.client import KeitaroClient, create_http_client
 from app.keitaro.gateway import KeitaroGateway
 from app.messaging.memory import MemoryBus
@@ -28,6 +31,7 @@ QUEUES = (TASKS,)
 class Runtime:
     storage: Storage
     bus: MessageBus
+    cache: Cache
     relay: Relay
     catalog: CatalogService
     creator: CreatorService
@@ -72,10 +76,15 @@ async def open_bus(settings: Settings) -> AsyncGenerator[MessageBus]:
 
 
 def assemble(
-    settings: Settings, keitaro: KeitaroGateway, storage: Storage, bus: MessageBus
+    settings: Settings,
+    keitaro: KeitaroGateway,
+    storage: Storage,
+    bus: MessageBus,
+    cache: Cache | None = None,
 ) -> Runtime:
     """Wire the services to their tracker, storage and bus."""
-    catalog = CatalogService(keitaro)
+    cache = cache or MemoryCache()
+    catalog = CatalogService(keitaro, cache, ttl=settings.catalog_ttl)
     relay = Relay(storage, bus)
     creator = CreatorService(
         keitaro,
@@ -91,6 +100,7 @@ def assemble(
     return Runtime(
         storage=storage,
         bus=bus,
+        cache=cache,
         relay=relay,
         catalog=catalog,
         creator=creator,
@@ -113,8 +123,9 @@ async def open_runtime(settings: Settings) -> AsyncGenerator[Runtime]:
         ) as http,
         open_storage(settings) as storage,
         open_bus(settings) as bus,
+        open_cache(settings) as cache,
     ):
-        runtime = assemble(settings, KeitaroClient(http), storage, bus)
+        runtime = assemble(settings, KeitaroClient(http), storage, bus, cache)
         if settings.message_bus != "memory":
             yield runtime
             return

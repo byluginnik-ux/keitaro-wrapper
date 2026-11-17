@@ -44,10 +44,13 @@ jobs:
       # the bus contract must pass on a real broker as well
       REQUIRE_BROKER_TESTS: "1"
       TEST_RABBITMQ_URL: amqp://guest:guest@127.0.0.1:55672/
+      # and the cache contract on a real Redis
+      REQUIRE_CACHE_TESTS: "1"
+      TEST_REDIS_URL: redis://127.0.0.1:56379/0
     steps:
       - uses: actions/checkout@v7
       # the same test databases and broker a developer starts locally
-      - run: docker compose -f ../compose.yaml --profile test up -d --wait db-test mongo-test rabbitmq-test
+      - run: docker compose -f ../compose.yaml --profile test up -d --wait db-test mongo-test rabbitmq-test redis-test
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true

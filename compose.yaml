@@ -13,10 +13,14 @@ x-backend: &backend
     MONGO_URL: mongodb://mongo:27017/?directConnection=true
     MESSAGE_BUS: rabbitmq
     RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    CACHE_BACKEND: redis
+    REDIS_URL: redis://redis:6379/0
   depends_on: &backend-needs
     migrate:
       condition: service_completed_successfully
     rabbitmq:
+      condition: service_healthy
+    redis:
       condition: service_healthy
 
 services:
@@ -49,6 +53,15 @@ services:
       interval: 3s
       timeout: 5s
       retries: 30
+
+  # Общий кэш справочников Keitaro (R-CH-02); данные не хранит дольше срока жизни ключей.
+  redis:
+    image: redis:8-alpine
+    healthcheck: &redis-health
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
 
   # Применяет миграции Alembic перед стартом бэкенда и завершается.
   migrate:
@@ -136,6 +149,13 @@ services:
     ports:
       - "127.0.0.1:${TEST_RABBITMQ_PORT:-55672}:5672"
     healthcheck: *rabbit-health
+
+  redis-test:
+    image: redis:8-alpine
+    profiles: [test]
+    ports:
+      - "127.0.0.1:${TEST_REDIS_PORT:-56379}:6379"
+    healthcheck: *redis-health
 
 volumes:
   db-data:
