@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 from app.keitaro import models as tracker
 from app.keitaro.gateway import KeitaroGateway
 from app.messaging.ports import Message
-from app.services.attempts import begin, is_transient, same_task, unfinished, utc_now
+from app.services.attempts import begin, ended, is_transient, same_task, unfinished, utc_now
 from app.services.errors import (
     EmptyStreamError,
     KeitaroError,
@@ -220,7 +220,9 @@ class PublisherService:
                     )
                 )
         except StorageConflictError:
-            return  # another delivery of the same message has already written the outcome
+            if await ended(self._storage, task.id):
+                return  # another delivery of the same message has already written the outcome
+            raise  # not ours to drop: the message is brought again
         self._announce()
 
 

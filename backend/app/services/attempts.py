@@ -37,6 +37,16 @@ async def unfinished(storage: Storage, message: Message) -> Task | None:
     return None if task is None or task.status.final else task
 
 
+async def ended(storage: Storage, task_id: UUID) -> bool:
+    """Tell whether somebody else has written the outcome of the task.
+
+    A refused write of an outcome means another delivery got there first only if the
+    task has ended. Otherwise stepping aside would leave it running for ever.
+    """
+    task = await storage.tasks.get(task_id)
+    return task is None or task.status.final
+
+
 async def begin(storage: Storage, message: Message, clock: Callable[[], datetime]) -> Task | None:
     """Mark the task as running and count the attempt; None means this delivery steps aside.
 

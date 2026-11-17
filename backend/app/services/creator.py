@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 from app.keitaro import models as tracker
 from app.keitaro.gateway import KeitaroGateway
 from app.messaging.ports import Message
-from app.services.attempts import begin, is_transient, same_task, unfinished, utc_now
+from app.services.attempts import begin, ended, is_transient, same_task, unfinished, utc_now
 from app.services.catalog import CatalogService
 from app.services.countries import find_country
 from app.services.errors import KeitaroError, ValidationError
@@ -448,7 +448,9 @@ class CreatorService:
                     )
                 )
         except StorageConflictError:
-            return  # another delivery of the same message has already written the outcome
+            if await ended(self._storage, task.id):
+                return  # another delivery of the same message has already written the outcome
+            raise  # the storage refused the campaign: brought again, then removed (R-CR-15)
         self._announce()
 
     async def _reject(self, run: _Run, error: object, *, status: int | None, look_up: bool) -> None:
@@ -495,7 +497,9 @@ class CreatorService:
                     OutboxMessage(uuid4(), CREATE_REJECTED, now, {"task_id": str(task.id)})
                 )
         except StorageConflictError:
-            return
+            if await ended(self._storage, task.id):
+                return
+            raise
         self._announce()
 
     async def _lost_campaign(self, alias: str) -> int | None:
