@@ -1,5 +1,6 @@
-// Records the demo: drives the real interface against the live tracker and shows,
-// after every change, what Keitaro itself holds (read through its Admin API).
+// Records the demo and checks the assignment: drives the real interface against the tracker and,
+// after every change, compares what Keitaro itself holds (read through its Admin API) with what
+// the assignment asks for. A mismatch ends the run with an error; the campaign is removed anyway.
 // Run from the repository root: node demo/record.mjs  (the service on DEMO_URL, .env with the key)
 import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
@@ -16,7 +17,18 @@ const env = Object.fromEntries(
 )
 const API = `${env.KEITARO_BASE_URL.replace(/\/$/, '')}/admin_api/v1`
 const NAME = `demo_${new Date().toISOString().slice(5, 16).replace(/[-T:]/g, '')}`
-const OFFERS = { first: '24800', second: '25327', third: '19958' }
+const [first, second, third] = (process.env.DEMO_OFFERS ?? '24800,25327,19958').split(',')
+const OFFERS = { first, second, third }
+const COUNTRY = { typed: 'каз', option: /Казахстан/, code: 'KZ' }
+// the fake tracker of the tests answers without filters and redirects: those checks need the real one
+const LIVE = !/127\.0\.0\.1|localhost/.test(API)
+
+async function write(method, path, body) {
+  const headers = { 'Api-Key': env.KEITARO_API_KEY, 'Accept': 'application/json', 'Content-Type': 'application/json' }
+  const response = await fetch(API + path, { method, headers, body: JSON.stringify(body) })
+  if (!response.ok) throw new Error(`Keitaro ${response.status} on ${method} ${path}`)
+  return response.json()
+}
 
 async function tracker(method, path) {
   const response = await fetch(API + path, { method, headers: { 'Api-Key': env.KEITARO_API_KEY, 'Accept': 'application/json' } })
@@ -25,6 +37,22 @@ async function tracker(method, path) {
 }
 
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms))
+const escaped = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/** What the run has proved, by item of the assignment. */
+const results = []
+
+function check(item, step, actual, expected) {
+  const ok = JSON.stringify(actual) === JSON.stringify(expected)
+  results.push({ item, step, ok })
+  if (!ok) throw new Error(`${item} — ${step}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`)
+}
+
+/** The offers the tracker holds in the stream with offers, as [id, share]. */
+function held(streams) {
+  const stream = streams.find(item => item.schema === 'landings')
+  return (stream?.offers ?? []).filter(offer => offer.state !== 'deleted').map(offer => [offer.offer_id, offer.share])
+}
 const marks = []
 const started = Date.now()
 
@@ -72,11 +100,23 @@ async function showTracker(page, campaignId, note) {
   }, [campaign.name, campaign.id, rows, note])
   await pause(6090)
   await page.evaluate(() => document.getElementById('demo-tracker')?.remove())
+  return { campaign, streams }
+}
+
+/** The shares the page shows, by offer ID; a removed offer shows 0. */
+async function shown(page) {
+  const shares = {}
+  for (const id of Object.values(OFFERS)) {
+    const item = row(page, id)
+    if (await item.count() === 0) continue
+    shares[id] = Number((await item.innerText()).match(/(\d+)\s*%/)?.[1])
+  }
+  return shares
 }
 
 async function pin(page, offer, share) {
-  await page.getByRole('button', { name: new RegExp(`^Доля оффера ${offer}[^:]*: `) }).click()
-  const input = page.getByRole('textbox', { name: new RegExp(`^Доля оффера ${offer}`) })
+  await page.getByRole('button', { name: new RegExp(`^Доля оффера ${escaped(names[offer])}: `) }).click()
+  const input = page.getByRole('textbox', { name: new RegExp(`^Доля оффера ${escaped(names[offer])}`) })
   await input.pressSequentially(String(share), { delay: 160 })
   await pause(725)
   await input.press('Enter')
@@ -91,7 +131,24 @@ async function add(page, id) {
 }
 
 const publish = page => page.getByRole('button', { name: 'Опубликовать' }).click()
-const row = (page, id) => page.getByRole('region', { name: 'Flow 2' }).getByRole('listitem').filter({ hasText: id })
+const row = (page, id) => page.getByRole('region', { name: 'Flow 2' }).getByRole('listitem').filter({ hasText: names[id] })
+/** The publication is a task: it has ended when the stream is neither being published nor a draft. */
+async function published(page) {
+  await pause(300)
+  await page.getByText('Публикуется…').waitFor({ state: 'detached', timeout: 60_000 })
+  await page.getByText('Не опубликовано').waitFor({ state: 'detached', timeout: 60_000 })
+}
+const ids = (...keys) => keys.map(key => Number(OFFERS[key]))
+
+// offers are named on the page; the run speaks of them by ID
+const names = Object.fromEntries(
+  (await tracker('GET', '/offers')).filter(offer => Object.values(OFFERS).includes(String(offer.id)))
+    .map(offer => [String(offer.id), offer.name]),
+)
+for (const id of Object.values(OFFERS)) if (!names[id]) throw new Error(`the tracker has no offer ${id}`)
+const group = (await tracker('GET', '/groups?type=campaigns')).find(item => item.name === 'FORTESTS')
+const source = (await tracker('GET', '/traffic_sources')).find(item => item.name === 'FORTESTS')
+const domains = await tracker('GET', '/domains')
 
 const browser = await chromium.launch({ executablePath: process.env.E2E_CHROMIUM ?? '/usr/bin/chromium' })
 const context = await browser.newContext({
@@ -139,26 +196,43 @@ try {
   await say(page, 'Пустая форма не уходит', 'у каждого поля своя подсказка')
   await pause(4350)
   await page.getByLabel('Название').pressSequentially(NAME, { delay: 70 })
-  await page.getByRole('combobox', { name: 'Страна' }).pressSequentially('каз', { delay: 120 })
-  await page.getByRole('option', { name: /Казахстан/ }).click()
+  await page.getByRole('combobox', { name: 'Страна' }).pressSequentially(COUNTRY.typed, { delay: 120 })
+  await page.getByRole('option', { name: COUNTRY.option }).click()
   await say(page, 'Оффер ищется в Keitaro', 'по названию или ID')
   await page.getByRole('combobox', { name: 'Оффер' }).pressSequentially(OFFERS.first, { delay: 120 })
   await page.getByRole('option').first().click()
   await page.getByRole('combobox', { name: 'Домен' }).click()
+  const domainName = (await page.getByRole('option').first().innerText()).trim()
+  const domain = domains.find(item => domainName.includes(item.name))
   await page.getByRole('option').first().click()
-  await page.getByRole('combobox', { name: 'Группа' }).pressSequentially('FORT', { delay: 120 })
-  await page.getByRole('option', { name: /FORTESTS/ }).click()
-  await page.getByRole('combobox', { name: 'Источник трафика' }).click()
-  await page.getByRole('option', { name: /FORTESTS/ }).click()
+  // a list of one is chosen by the form itself: clear the field before typing
+  for (const field of ['Группа', 'Источник трафика']) {
+    const box = page.getByRole('combobox', { name: field })
+    await box.fill('')
+    await box.pressSequentially('FORT', { delay: 120 })
+    await page.getByRole('option', { name: /FORTESTS/ }).click()
+  }
   await say(page, 'Домен, группа и источник', 'справочники из Admin API')
   await pause(3190)
   await page.getByRole('button', { name: 'Создать кампанию' }).click()
+  const creating = await page.getByRole('status').filter({ hasText: 'Создаётся' }).waitFor({ timeout: 3000 }).then(() => true, () => false)
+  if (creating) await say(page, 'Создание — задача', 'запрос поставил её и ответил, в Keitaro пишет обработчик')
   await page.getByText('Кампания создана').waitFor({ timeout: 60_000 })
   const link = await page.getByRole('link', { name: 'Открыть в Keitaro' }).getAttribute('href')
   campaignId = Number(link.split('/').pop())
   await say(page, 'Кампания создана в Keitaro', `ID ${campaignId}`)
   await pause(2610)
-  await showTracker(page, campaignId, 'после создания')
+  const made = await showTracker(page, campaignId, 'после создания')
+  check('Создаватор: название, страна, ID оффера', 'кампания есть в трекере под своим именем', made.campaign.name, `${env.CAMPAIGN_NAME_PREFIX ?? 'test_bulygin_'}${NAME}`)
+  check('Создаватор: домен, группа, источник', 'выбранные в форме', [made.campaign.domain_id, made.campaign.group_id, made.campaign.traffic_source_id], [domain?.id, group?.id, source?.id])
+  check('Создаватор: два потока', 'по позициям', made.streams.map(stream => [stream.position, stream.schema]).sort(), [[1, 'redirect'], [2, 'landings']])
+  if (LIVE) {
+    const redirect = made.streams.find(stream => stream.schema === 'redirect')
+    check('Создаватор: поток 1 ловит страну и ведёт на Google', 'фильтр и адрес',
+      [(redirect.filters ?? []).map(filter => [filter.name, filter.mode, [].concat(filter.payload)]), redirect.action_payload],
+      [[['country', 'accept', [COUNTRY.code]]], 'https://google.com'])
+  }
+  check('Создаватор: поток 2 ведёт на выбранный оффер', 'один оффер, доля 100', held(made.streams), [[Number(OFFERS.first), 100]])
   await say(page, 'Два потока', 'страна → google.com, остальные → оффер 100 %')
   await pause(3625)
 
@@ -175,41 +249,73 @@ try {
   await row(page, OFFERS.third).waitFor()
   await say(page, 'Ещё один', '34 / 33 / 33 — сумма всегда 100')
   await pause(3770)
-  await showTracker(page, campaignId, 'черновик не отправлен')
+  check('Редактор: цифры', 'три оффера делят 100', await shown(page), { [OFFERS.first]: 34, [OFFERS.second]: 33, [OFFERS.third]: 33 })
+  const draft = await showTracker(page, campaignId, 'черновик не отправлен')
+  check('Редактор: добавление', 'черновик не меняет трекер', held(draft.streams), [[Number(OFFERS.first), 100]])
   await say(page, 'В Keitaro пока прежний состав', 'изменения копятся в черновике')
   await pause(3190)
   await publish(page)
-  await page.getByText('Не опубликовано').waitFor({ state: 'detached', timeout: 60_000 })
-  await say(page, '«Опубликовать»', 'состав и доли ушли в Keitaro')
+  await published(page)
+  await say(page, '«Опубликовать»', 'публикация — задача; состав и доли ушли в Keitaro')
   await pause(2175)
-  await showTracker(page, campaignId, 'после публикации')
+  const three = await showTracker(page, campaignId, 'после публикации')
+  const [a, b, c] = ids('first', 'second', 'third')
+  check('Редактор: добавление', 'после публикации в трекере три оффера', held(three.streams), [[a, 34], [b, 33], [c, 33]])
 
-  await page.getByRole('button', { name: new RegExp(`^Удалить ${OFFERS.second}`) }).click()
+  await page.getByRole('button', { name: new RegExp(`^Удалить ${escaped(names[OFFERS.second])}`) }).click()
   await say(page, 'Удалили оффер', 'он остаётся в потоке: «Удалён», 0 %, доли пересчитаны')
   await pause(4350)
+  check('Редактор: цифры', 'удалённый — 0, остальные 50 / 50', await shown(page), { [OFFERS.first]: 50, [OFFERS.second]: 0, [OFFERS.third]: 50 })
   await publish(page)
-  await page.getByText('Не опубликовано').waitFor({ state: 'detached', timeout: 60_000 })
-  await showTracker(page, campaignId, 'оффер удалён')
-  await page.getByRole('button', { name: new RegExp(`^Вернуть ${OFFERS.second}`) }).click()
+  await published(page)
+  const two = await showTracker(page, campaignId, 'оффер удалён')
+  check('Редактор: удаление', 'после публикации оффера нет в трекере', held(two.streams), [[a, 50], [c, 50]])
+  await page.getByRole('button', { name: new RegExp(`^Вернуть ${escaped(names[OFFERS.second])}`) }).click()
   await say(page, '«Вернуть»', 'оффер снова активен, доли снова 34 / 33 / 33')
   await pause(3770)
   await publish(page)
-  await page.getByText('Не опубликовано').waitFor({ state: 'detached', timeout: 60_000 })
-  await showTracker(page, campaignId, 'оффер возвращён')
+  await published(page)
+  const back = await showTracker(page, campaignId, 'оффер возвращён')
+  check('Редактор: возврат удалённого', 'оффер снова в трекере', held(back.streams), [[a, 34], [b, 33], [c, 33]])
 
   await say(page, 'Закрепление доли', 'нажать на долю, ввести число, Enter')
   await pin(page, OFFERS.first, 60)
   await pause(1160)
   await say(page, 'Доля 60 % закреплена', 'остальные делят остаток: 20 / 20')
   await pause(4350)
+  check('Редактор: закрепление доли', 'остальные делят остаток', await shown(page), { [OFFERS.first]: 60, [OFFERS.second]: 20, [OFFERS.third]: 20 })
+  await page.getByRole('button', { name: new RegExp(`^Удалить ${escaped(names[OFFERS.third])}`) }).click()
+  await say(page, 'Удалили оффер при закреплённой доле', '60 % на месте, остаток у оставшегося')
+  await pause(3770)
+  check('Редактор: закрепление доли', 'закреплённая не меняется при пересчёте', await shown(page), { [OFFERS.first]: 60, [OFFERS.second]: 40, [OFFERS.third]: 0 })
   await pin(page, OFFERS.second, 50)
   await page.getByRole('region', { name: 'Flow 2' }).getByRole('alert').waitFor()
   await say(page, 'Отказ: 60 + 50 больше 100', 'доли не изменились')
   await pause(5075)
+  check('Редактор: переполнение', 'отказ, доли прежние', await shown(page), { [OFFERS.first]: 60, [OFFERS.second]: 40, [OFFERS.third]: 0 })
+  await page.keyboard.press('Escape')
   await page.getByRole('button', { name: 'Отменить' }).click()
   await page.getByText('Не опубликовано').waitFor({ state: 'detached' })
   await say(page, '«Отменить»', 'поток вернулся к опубликованному состоянию')
   await pause(4060)
+  check('Редактор: отмена', 'на странице опубликованный состав', await shown(page), { [OFFERS.first]: 34, [OFFERS.second]: 33, [OFFERS.third]: 33 })
+  check('Редактор: отмена', 'в трекер ничего не ушло', held(await tracker('GET', `/campaigns/${campaignId}/streams`)), [[a, 34], [b, 33], [c, 33]])
+
+  // the composition is changed in the tracker itself, behind the back of the service
+  const stream = back.streams.find(item => item.schema === 'landings')
+  await write('PUT', `/streams/${stream.id}`, { offers: [{ offer_id: a, share: 50 }, { offer_id: b, share: 50 }] })
+  await say(page, 'Состав изменили в самом Keitaro', 'третий оффер убран через Admin API')
+  await showTracker(page, campaignId, 'изменено в Keitaro')
+  await page.getByRole('button', { name: 'Обновить из Keitaro' }).click()
+  await page.getByRole('button', { name: new RegExp(`^Вернуть ${escaped(names[OFFERS.third])}`) }).waitFor({ timeout: 60_000 })
+  await say(page, '«Обновить из Keitaro»', 'убранный оффер помечен «Удалён», доли как в трекере')
+  await pause(4350)
+  check('Редактор: изменение в самом Keitaro', 'после обновления убранный оффер — 0, остальные как в трекере', await shown(page), { [OFFERS.first]: 50, [OFFERS.second]: 50, [OFFERS.third]: 0 })
+
+  await page.getByRole('link', { name: 'Задачи' }).click()
+  await page.locator('[data-task]').first().waitFor()
+  await say(page, 'Задачи', 'каждое создание и публикация — задача с итогом; отклонённую можно повторить')
+  await pause(4350)
 
   const theme = page.getByRole('button', { name: /Тема:/ })
   await theme.click()
@@ -219,7 +325,7 @@ try {
   await page.goto(`${URL_}/`)
   await say(page, 'Список кампаний сервиса', 'любую кампанию трекера можно открыть по её ID')
   await pause(4350)
-  await card('Что внутри', ['FastAPI + GraphQL · Nuxt и BFF на Nitro · Postgres или MongoDB', 'Разработка от тестов: 281 тест бэкенда, 131 интерфейса, 16 сквозных сценариев', 'github.com/byluginnik-ux/keitaro-wrapper'], 6500)
+  await card('Что внутри', ['FastAPI + GraphQL · Nuxt и BFF на Nitro · Postgres или MongoDB', 'Задачи, outbox, RabbitMQ, Redis · 368 тестов бэкенда, 170 интерфейса, 21 сквозной сценарий', 'github.com/byluginnik-ux/keitaro-wrapper'], 6500)
 }
 finally {
   await context.close()
@@ -228,6 +334,8 @@ finally {
     const removed = await tracker('DELETE', `/campaigns/${campaignId}`)
     console.log('deleted in the tracker:', campaignId, [].concat(removed)[0]?.state)
   }
+  for (const { item, step, ok } of results) console.log(`${ok ? 'OK  ' : 'FAIL'} ${item} — ${step}`)
+  console.log(`checks: ${results.filter(result => result.ok).length} of ${results.length} passed${LIVE ? '' : ' (fake tracker: the filter and the redirect of stream 1 are not checked)'}`)
   console.log(JSON.stringify({ seconds: (Date.now() - started) / 1000, marks }))
   console.log('video:', await page.video()?.path())
 }
